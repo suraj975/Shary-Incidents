@@ -25,11 +25,14 @@ function sleep(ms) {
 
 function formatDateRangeLastTwoMonths() {
   const end = new Date();
+  end.setHours(23, 59, 0, 0);
   const start = new Date(end);
   start.setMonth(start.getMonth() - 2);
+  start.setHours(0, 0, 0, 0);
   const pad = (value) => String(value).padStart(2, "0");
-  const fmt = (date) => `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
-  return `${fmt(start)} - ${fmt(end)}`;
+  const fmt = (date, time) =>
+    `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${time}`;
+  return `${fmt(start, "00:00")} - ${fmt(end, "23:59")}`;
 }
 
 function extractKeysFromDetail(detail) {
@@ -285,7 +288,7 @@ async function scrapeAdminApplication(keys) {
         func: async (payload) => {
           const normalizeText = (value) => (value || "").replace(/\s+/g, " ").trim();
           const setInputValue = (input, value) => {
-            if (!input || value == null || value === "") return false;
+            if (!input) return false;
             const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
             if (setter) {
               setter.call(input, String(value));
@@ -330,15 +333,58 @@ async function scrapeAdminApplication(keys) {
             findInputByPlaceholder("Enter Chassis No") ||
             findInputByLabel("Chassis No");
 
-          setInputValue(applicationInput, payload.applicationId);
-          setInputValue(presaleInput, payload.presaleNo);
-          setInputValue(emiratesInput, payload.emiratesId);
-          setInputValue(chassisInput, payload.chassisNo);
+          const clearInput = (input) => setInputValue(input, "");
+          clearInput(applicationInput);
+          clearInput(presaleInput);
+          clearInput(emiratesInput);
+          clearInput(chassisInput);
+
+          const primaryKey =
+            payload.applicationId ||
+            payload.presaleNo ||
+            payload.emiratesId ||
+            payload.chassisNo ||
+            "";
+
+          if (primaryKey && payload.applicationId) setInputValue(applicationInput, payload.applicationId);
+          else if (primaryKey && payload.presaleNo) setInputValue(presaleInput, payload.presaleNo);
+          else if (primaryKey && payload.emiratesId) setInputValue(emiratesInput, payload.emiratesId);
+          else if (primaryKey && payload.chassisNo) setInputValue(chassisInput, payload.chassisNo);
 
           const searchButton = Array.from(document.querySelectorAll("button"))
             .find((btn) => normalizeText(btn.textContent) === "Search");
-          if (searchButton) {
-            searchButton.removeAttribute("disabled");
+          const waitForEnabledSearch = () =>
+            new Promise((resolve) => {
+              const start = Date.now();
+              const timer = setInterval(() => {
+                const dateValue = normalizeText(dateInput?.value || "");
+                const ready =
+                  dateValue === normalizeText(payload.dateRange) &&
+                  searchButton &&
+                  !searchButton.disabled;
+                if (ready) {
+                  clearInterval(timer);
+                  resolve(true);
+                  return;
+                }
+                if (Date.now() - start > 8000) {
+                  clearInterval(timer);
+                  resolve(false);
+                }
+              }, 300);
+            });
+
+          const searchReady = await waitForEnabledSearch();
+          if (!searchReady) {
+            // Retry date once, then re-check.
+            setInputValue(dateInput, payload.dateRange);
+            await new Promise((r) => setTimeout(r, 300));
+            if (!searchButton || searchButton.disabled) {
+              return { ok: false, error: "Search disabled" };
+            }
+          }
+
+          if (searchButton && !searchButton.disabled) {
             searchButton.click();
           }
 

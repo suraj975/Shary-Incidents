@@ -9,6 +9,9 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata = {
   title: "Shary Incidents Dashboard",
   description: "Operations dashboard for Shary incidents",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
