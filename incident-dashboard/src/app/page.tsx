@@ -320,12 +320,26 @@ export default function Home() {
         <div className="login-card">
           <div className="brand">
             <span className="brand-dot" />
-            Shary Incidents Dashboard
+            <div>
+              <div className="login-title">Shary Incidents</div>
+              <div className="login-subtitle">
+                Secure operations dashboard for incident tracking and case follow‑up.
+              </div>
+            </div>
           </div>
-          <div style={{ marginTop: 12 }} className="sidebar-section">
-            <button className="button primary" onClick={handleGoogleLogin}>
+          <div className="login-actions">
+            <button className="google-button" onClick={handleGoogleLogin}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="#0b0e14"
+                  d="M12 10.2v3.6h5.05c-.2 1.25-1.5 3.66-5.05 3.66-3.05 0-5.54-2.52-5.54-5.62 0-3.1 2.49-5.62 5.54-5.62 1.73 0 2.9.74 3.56 1.38l2.42-2.34C16.52 3.64 14.46 2.6 12 2.6 6.9 2.6 2.76 6.77 2.76 11.84 2.76 16.9 6.9 21.08 12 21.08c6.93 0 8.63-4.85 8.63-7.4 0-.5-.06-.88-.12-1.27H12z"
+                />
+              </svg>
               Continue with Google
             </button>
+            <div className="login-note">
+              Use your company Gmail account to continue.
+            </div>
           </div>
         </div>
       </div>
