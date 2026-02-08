@@ -1,0 +1,22 @@
+{
+  "name": "playwright-rpa-workflow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "ts-node src/run.ts",
+    "build": "tsc",
+    "summarize": "node scripts/summarize-incidents.js --input artifacts/site1_details.json --output artifacts/incident_summaries.json --format json",
+    "llm-server": "node scripts/local-llm-server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "openai": "^4.73.0",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

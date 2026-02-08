@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Incident Summaries</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="title">Incident Summaries</div>
+        <div class="subtitle">Local JSON + LLM summaries</div>
+      </header>
+
+      <section class="controls">
+        <div class="row">
+          <button id="btn-load" class="btn">Load From Storage</button>
+          <button id="btn-scrape" class="btn">Scrape Now</button>
+          <button id="btn-clear" class="btn ghost">Clear</button>
+          <button id="btn-download" class="btn ghost">Download JSON</button>
+        </div>
+        <div class="row">
+          <label class="file-btn">
+            Import JSON
+            <input id="file-input" type="file" accept="application/json" />
+          </label>
+          <button id="btn-summarize" class="btn primary">Summarize (LLM)</button>
+        </div>
+        <div class="row">
+          <input id="server-url" class="input" type="text" value="http://localhost:8787/summarize" />
+        </div>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="content">
+        <div class="grid">
+          <div class="panel">
+            <div class="panel-title">Incidents</div>
+            <div id="incident-list" class="list"></div>
+          </div>
+          <div class="panel">
+            <div class="tabs">
+              <button id="tab-summary" class="tab active">Summary</button>
+              <button id="tab-json" class="tab">Raw JSON</button>
+            </div>
+            <div id="summary-pane" class="tab-pane active">
+              <pre id="summary-view" class="summary"></pre>
+            </div>
+            <div id="json-pane" class="tab-pane">
+              <pre id="json-view" class="json"></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="panel.js"></script>
+  </body>
+</html>
