@@ -138,11 +138,21 @@ button, input, textarea, select {
 }
 
 .incident-card {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: #121825;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.incident-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(106, 227, 255, 0.35);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.25);
 }
 
 .incident-card.active {
@@ -158,6 +168,63 @@ button, input, textarea, select {
 .incident-card.resolved {
   border-color: #1f6b45;
   background: radial-gradient(circle at 20% 20%, rgba(94,225,166,0.18), transparent 40%), #121825;
+}
+
+.incident-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.incident-number {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+}
+
+.incident-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.incident-meta-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  color: #9fb0c3;
+}
+
+.incident-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: rgba(90, 120, 160, 0.18);
+  color: #cfe3ff;
+  white-space: nowrap;
+}
+
+.pill-open {
+  border-color: rgba(106, 227, 255, 0.35);
+  background: rgba(106, 227, 255, 0.12);
+  color: #b7f1ff;
+}
+
+.pill-urgent {
+  border-color: rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.12);
+  color: #ffd1d1;
+}
+
+.pill-resolved {
+  border-color: rgba(94, 225, 166, 0.4);
+  background: rgba(94, 225, 166, 0.12);
+  color: #c7f5de;
 }
 
 .main {

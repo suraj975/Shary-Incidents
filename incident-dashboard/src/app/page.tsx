@@ -403,9 +403,25 @@ export default function Home() {
                   }`}
                   onClick={() => setActiveId(i.id)}
                 >
-                  <div style={{ fontWeight: 700 }}>{i.number}</div>
-                  <div style={{ color: "var(--muted)", fontSize: 12 }}>
-                    {i.state || "—"} | {i.openedAt || "—"}
+                  <div className="incident-card-header">
+                    <div className="incident-number">{i.number}</div>
+                    <div
+                      className={`incident-pill ${
+                        i.status === "resolved"
+                          ? "pill-resolved"
+                          : isUrgent
+                          ? "pill-urgent"
+                          : "pill-open"
+                      }`}
+                    >
+                      {i.status === "resolved" ? "Resolved" : i.state || "—"}
+                    </div>
+                  </div>
+                  <div className="incident-meta">
+                    <span className="incident-meta-label">Opened</span>
+                    <span className="incident-meta-value">
+                      {i.openedAt || "—"}
+                    </span>
                   </div>
                 </div>
               );
