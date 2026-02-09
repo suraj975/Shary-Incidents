@@ -53,7 +53,26 @@ function renderSummary(structured?: SummaryStructured | null, fallback?: string)
         <div className="summary-block">
           <div className="summary-title">Current Application State</div>
           <div className="summary-text">
-            {structured.current_application_state || "—"}
+            {(() => {
+              const state = structured.current_application_state;
+              if (!state) return "—";
+              if (typeof state === "string") return state;
+              if (typeof state === "object") {
+                const entries = Object.entries(state);
+                if (entries.length === 0) return "—";
+                return (
+                  <ul className="timeline">
+                    {entries.map(([k, v]) => (
+                      <li key={k}>
+                        <strong>{k.replace(/_/g, " ")}:</strong>{" "}
+                        {typeof v === "string" ? v : JSON.stringify(v)}
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+              return String(state);
+            })()}
           </div>
         </div>
         <div className="summary-block">

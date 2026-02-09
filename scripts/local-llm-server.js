@@ -41,78 +41,107 @@ ${JSON.stringify(incident, null, 2)}`;
 }
 
 async function summarizeIncident(client, incident) {
+  // Responses API: response_format -> text.format
   const response = await client.responses.create({
     model: MODEL,
-    response_format: { type: "json_object" },
     input: [
       {
         role: "system",
         content:
-          "You are an operations analyst. Respond ONLY with valid JSON that matches the requested schema. No extra text."
+          "You are an operations analyst. Respond ONLY with valid JSON that matches the requested schema. No extra text.",
       },
-      { role: "user", content: buildPrompt(incident) }
-    ]
+      { role: "user", content: buildPrompt(incident) },
+    ],
+    text: {
+      format: { type: "json_object" },
+    },
   });
+
   const text = response.output_text || "";
+
   try {
     return JSON.parse(text);
-  } catch (error) {
-    return { title: incident.Number || "", error: "Invalid JSON summary", raw: text };
+  } catch {
+    return {
+      title: incident.Number || incident.number || "",
+      what_happened: "",
+      key_timeline: [],
+      current_application_state: {
+        status: "",
+        application_id: "",
+        presale_no: "",
+        emirates_id: "",
+        chassis_no: "",
+        details: "",
+      },
+      evidence: [],
+      attachments: [],
+      error: "Invalid JSON summary",
+      raw: text,
+    };
   }
 }
 
 function sendJson(res, statusCode, data) {
+  const body = statusCode === 204 ? "" : JSON.stringify(data ?? {}, null, 2);
+
   res.writeHead(statusCode, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type",
   });
-  res.end(JSON.stringify(data));
+
+  res.end(body);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    sendJson(res, 204, {});
-    return;
-  }
-
-  if (req.method !== "POST" || req.url !== "/summarize") {
-    sendJson(res, 404, { error: "Not found" });
-    return;
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    sendJson(res, 500, { error: "Missing OPENAI_API_KEY" });
-    return;
-  }
-
-  let body = "";
-  req.on("data", (chunk) => {
-    body += chunk;
-  });
-
-  req.on("end", async () => {
-    try {
-      const payload = JSON.parse(body || "{}");
-      const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-      const summaries = [];
-      for (const incident of incidents) {
-        const structured = await summarizeIncident(client, incident);
-        summaries.push({
-          number: incident.Number || incident.number || "",
-          summary: typeof structured === "string" ? structured : "",
-          structured: typeof structured === "object" ? structured : null
-        });
-      }
-
-      sendJson(res, 200, { summaries });
-    } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+  try {
+    if (req.method === "OPTIONS") {
+      sendJson(res, 204, {});
+      return;
     }
-  });
+
+    if (req.method !== "POST" || req.url !== "/summarize") {
+      sendJson(res, 404, { error: "Not found" });
+      return;
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      sendJson(res, 500, { error: "Missing OPENAI_API_KEY" });
+      return;
+    }
+
+    const raw = await readBody(req);
+    const payload = JSON.parse(raw || "{}");
+    const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const summaries = [];
+    for (const incident of incidents) {
+      const structured = await summarizeIncident(client, incident);
+
+      summaries.push({
+        number: incident.Number || incident.number || "",
+        // structured is an object (or a fallback object). summary string isn't needed.
+        structured,
+      });
+    }
+
+    sendJson(res, 200, { summaries });
+  } catch (error) {
+    sendJson(res, 500, { error: String(error?.message || error) });
+  }
 });
 
 server.listen(PORT, () => {
