@@ -137,6 +137,51 @@ button, input, textarea, select {
   padding-right: 4px;
 }
 
+.incident-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.incident-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.incident-tab {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #0f1420;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.incident-tab.active {
+  color: #b7f1ff;
+  border-color: rgba(106, 227, 255, 0.4);
+  background: rgba(106, 227, 255, 0.12);
+}
+
+.incident-search {
+  position: relative;
+}
+
+.incident-search-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0f1420;
+  color: var(--text);
+  font-size: 12px;
+}
+
 .incident-card {
   padding: 12px 14px;
   border-radius: 12px;
@@ -490,4 +535,6 @@ button, input, textarea, select {
   .page { grid-template-columns: 1fr; height: auto; }
   .content { grid-template-columns: 1fr; height: auto; }
   .list { max-height: 320px; }
+  .incident-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .incident-tab { white-space: nowrap; }
 }

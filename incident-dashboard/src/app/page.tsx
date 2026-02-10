@@ -141,6 +141,10 @@ export default function Home() {
   const [commentType, setCommentType] = useState<CommentType>("ops");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [incidentQuery, setIncidentQuery] = useState("");
+  const [incidentFilter, setIncidentFilter] = useState<
+    "all" | "assigned" | "resolved" | "in_progress" | "hold"
+  >("all");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -187,6 +191,36 @@ export default function Home() {
     () => incidents.find((i) => i.id === activeId) || null,
     [incidents, activeId]
   );
+
+  const filteredIncidents = useMemo(() => {
+    const query = incidentQuery.trim().toLowerCase();
+    return incidents.filter((i) => {
+      const state = (i.state || "").toLowerCase();
+      const status = (i.status || "").toLowerCase();
+      let passesFilter = true;
+      if (incidentFilter === "resolved") {
+        passesFilter = status === "resolved" || state === "resolved";
+      } else if (incidentFilter === "assigned") {
+        passesFilter = status !== "resolved" && state.includes("assigned");
+      } else if (incidentFilter === "in_progress") {
+        passesFilter = status !== "resolved" && state.includes("in progress");
+      } else if (incidentFilter === "hold") {
+        passesFilter = status !== "resolved" && state.includes("hold");
+      }
+      if (!passesFilter) return false;
+      if (!query) return true;
+      const hay = [
+        i.number,
+        i.state,
+        i.openedAt,
+        i.description,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(query);
+    });
+  }, [incidents, incidentQuery, incidentFilter]);
 
   const applicationDetails = useMemo(() => {
     const raw = (activeIncident?.raw as any) || {};
@@ -387,8 +421,60 @@ export default function Home() {
 
         <div className="sidebar-section">
           <label className="section-title">Incidents</label>
+          <div className="incident-controls">
+            <div className="incident-tabs">
+              <button
+                className={`incident-tab ${
+                  incidentFilter === "all" ? "active" : ""
+                }`}
+                onClick={() => setIncidentFilter("all")}
+              >
+                All
+              </button>
+              <button
+                className={`incident-tab ${
+                  incidentFilter === "assigned" ? "active" : ""
+                }`}
+                onClick={() => setIncidentFilter("assigned")}
+              >
+                Assigned
+              </button>
+              <button
+                className={`incident-tab ${
+                  incidentFilter === "resolved" ? "active" : ""
+                }`}
+                onClick={() => setIncidentFilter("resolved")}
+              >
+                Resolved
+              </button>
+              <button
+                className={`incident-tab ${
+                  incidentFilter === "in_progress" ? "active" : ""
+                }`}
+                onClick={() => setIncidentFilter("in_progress")}
+              >
+                In Progress
+              </button>
+              <button
+                className={`incident-tab ${
+                  incidentFilter === "hold" ? "active" : ""
+                }`}
+                onClick={() => setIncidentFilter("hold")}
+              >
+                Hold
+              </button>
+            </div>
+            <div className="incident-search">
+              <input
+                className="incident-search-input"
+                placeholder="Search incidents..."
+                value={incidentQuery}
+                onChange={(e) => setIncidentQuery(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="list">
-            {incidents.map((i) => {
+            {filteredIncidents.map((i) => {
               const opened = parseOpenedAt(i.openedAt);
               const isUrgent = opened
                 ? Date.now() - opened.getTime() > threeDaysMs
@@ -426,7 +512,7 @@ export default function Home() {
                 </div>
               );
             })}
-            {incidents.length === 0 && (
+            {filteredIncidents.length === 0 && (
               <div className="chip">No incidents in Firestore.</div>
             )}
           </div>
