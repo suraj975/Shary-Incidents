@@ -30,6 +30,7 @@ type InsightsPayload = {
   priorityPie: { name: string; value: number }[];
   topShort: { name: string; value: number }[];
   topAssignment: { name: string; value: number }[];
+  debugOpenedSamples?: { raw: any; parsed: string | null; type: string }[];
 };
 
 export default function InsightsPage() {

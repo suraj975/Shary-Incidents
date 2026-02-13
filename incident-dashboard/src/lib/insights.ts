@@ -1,4 +1,4 @@
-export function parseOpenedAt(value?: string) {
+export function parseOpenedAt(value?: any) {
   if (!value) return null;
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value;
