@@ -178,9 +178,20 @@ export default function Home() {
           });
       });
       items.sort((a, b) => {
-        const da = parseOpenedAt(a.openedAt)?.getTime() || 0;
-        const dbt = parseOpenedAt(b.openedAt)?.getTime() || 0;
-        if (dbt !== da) return dbt - da;
+        const aOps = !!a.opsHelp;
+        const bOps = !!b.opsHelp;
+        if (aOps !== bOps) return aOps ? -1 : 1;
+
+        const aResolved = a.status === "resolved";
+        const bResolved = b.status === "resolved";
+        if (aResolved !== bResolved) return aResolved ? 1 : -1;
+
+        const da = parseOpenedAt(a.openedAt)?.getTime();
+        const dbt = parseOpenedAt(b.openedAt)?.getTime();
+        if (da != null && dbt != null && dbt !== da) return dbt - da;
+        if (da == null && dbt != null) return 1;
+        if (da != null && dbt == null) return -1;
+
         return (b.updatedAt || 0) - (a.updatedAt || 0);
       });
       setIncidents(items);
