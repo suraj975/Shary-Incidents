@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, setDoc } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc } from "firebase/firestore";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 
@@ -14,6 +14,7 @@ function toDocId(number: string) {
 function nowTs() {
   return Date.now();
 }
+
 
 export default function ImportPage() {
   const [authed, setAuthed] = useState(false);
@@ -31,26 +32,48 @@ export default function ImportPage() {
     await signInWithPopup(auth, provider);
   }
 
+  function normalizeItem(item: any) {
+    return {
+      number: item.Number || item.number || "",
+      state: item.State || item.state || "",
+      openedAt: item.Opened || item.openedAt || "",
+      description: item.Description || item.description || "",
+      summary: item.summary || "",
+      summaryStructured: item.summaryStructured || null,
+      raw: item,
+    };
+  }
+
   async function handleImport(file: File) {
     setStatus("Importing...");
     const text = await file.text();
     const payload = JSON.parse(text);
     const list = Array.isArray(payload) ? payload : payload?.incidents || [];
 
+    const existing = new Set<string>();
+    const existingSnap = await getDocs(collection(db, "incidents"));
+    existingSnap.forEach((docSnap) => existing.add(docSnap.id));
+
     let count = 0;
+    let skipped = 0;
     for (const item of list) {
-      if (!item.Number) continue;
-      const id = toDocId(item.Number);
+      const normalized = normalizeItem(item);
+      if (!normalized.number) continue;
+      const id = toDocId(normalized.number);
+      if (existing.has(id)) {
+        skipped += 1;
+        continue;
+      }
       await setDoc(
         doc(db, "incidents", id),
         {
-          number: item.Number,
-          state: item.State || item.state || "",
-          openedAt: item.Opened || item.openedAt || "",
-          description: item.Description || "",
-          summary: item.summary || "",
-          summaryStructured: item.summaryStructured || null,
-          raw: item,
+          number: normalized.number,
+          state: normalized.state,
+          openedAt: normalized.openedAt,
+          description: normalized.description,
+          summary: normalized.summary,
+          summaryStructured: normalized.summaryStructured,
+          raw: normalized.raw,
           updatedAt: nowTs(),
         },
         { merge: true }
@@ -58,7 +81,7 @@ export default function ImportPage() {
       count += 1;
     }
 
-    setStatus(`Imported ${count} incident(s).`);
+    setStatus(`Imported ${count} incident(s). Skipped ${skipped} existing.`);
   }
 
   if (!user) {

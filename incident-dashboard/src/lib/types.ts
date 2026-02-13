@@ -10,6 +10,7 @@ export type Incident = {
   status?: "open" | "resolved";
   callAttempts?: number;
   noAnswerCount?: number;
+  opsHelp?: boolean;
   updatedAt?: number;
 };
 

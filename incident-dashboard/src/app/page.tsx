@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   onAuthStateChanged,
   GoogleAuthProvider,
@@ -160,20 +161,21 @@ export default function Home() {
       const items: Incident[] = [];
       snap.forEach((docSnap) => {
         const data = docSnap.data() as any;
-        items.push({
-          id: docSnap.id,
-          number: data.number,
-          state: data.state,
-          openedAt: data.openedAt,
-          description: data.description,
-          summary: data.summary,
-          summaryStructured: data.summaryStructured || null,
-          raw: data.raw,
-          status: data.status || "open",
-          callAttempts: data.callAttempts || 0,
-          noAnswerCount: data.noAnswerCount || 0,
-          updatedAt: data.updatedAt || 0,
-        });
+          items.push({
+            id: docSnap.id,
+            number: data.number,
+            state: data.state,
+            openedAt: data.openedAt,
+            description: data.description,
+            summary: data.summary,
+            summaryStructured: data.summaryStructured || null,
+            raw: data.raw,
+            status: data.status || "open",
+            callAttempts: data.callAttempts || 0,
+            noAnswerCount: data.noAnswerCount || 0,
+            opsHelp: data.opsHelp || false,
+            updatedAt: data.updatedAt || 0,
+          });
       });
       items.sort((a, b) => {
         const da = parseOpenedAt(a.openedAt)?.getTime() || 0;
@@ -367,6 +369,16 @@ export default function Home() {
     );
   }
 
+  async function toggleOpsHelp() {
+    if (!activeIncident) return;
+    const next = !activeIncident.opsHelp;
+    await updateDoc(doc(db, "incidents", activeIncident.id), {
+      opsHelp: next,
+      updatedAt: nowTs(),
+    });
+    await addLog(next ? "Ops help requested." : "Ops help cleared.");
+  }
+
   if (!user) {
     return (
       <div className="login">
@@ -412,6 +424,9 @@ export default function Home() {
           <button className="button" onClick={handleLogout}>
             Log out
           </button>
+          <Link className="button" href="/insights">
+            Insights
+          </Link>
         </div>
 
         <div className="sidebar-section">
@@ -491,16 +506,21 @@ export default function Home() {
                 >
                   <div className="incident-card-header">
                     <div className="incident-number">{i.number}</div>
-                    <div
-                      className={`incident-pill ${
-                        i.status === "resolved"
-                          ? "pill-resolved"
-                          : isUrgent
-                          ? "pill-urgent"
-                          : "pill-open"
-                      }`}
-                    >
-                      {i.status === "resolved" ? "Resolved" : i.state || "—"}
+                    <div className="incident-pill-group">
+                      {i.opsHelp ? (
+                        <div className="incident-pill pill-ops">Ops Help</div>
+                      ) : null}
+                      <div
+                        className={`incident-pill ${
+                          i.status === "resolved"
+                            ? "pill-resolved"
+                            : isUrgent
+                            ? "pill-urgent"
+                            : "pill-open"
+                        }`}
+                      >
+                        {i.status === "resolved" ? "Resolved" : i.state || "—"}
+                      </div>
                     </div>
                   </div>
                   <div className="incident-meta">
@@ -615,6 +635,16 @@ export default function Home() {
                     {activeIncident.status === "resolved"
                       ? "Mark Unresolved"
                       : "Mark Resolved"}
+                  </button>
+                  <button
+                    className={`button ${
+                      activeIncident.opsHelp ? "danger" : ""
+                    }`}
+                    onClick={toggleOpsHelp}
+                  >
+                    {activeIncident.opsHelp
+                      ? "Clear Ops Help"
+                      : "Request Ops Help"}
                   </button>
                   <div className="count-box">
                     <div className="chip">Calls</div>
