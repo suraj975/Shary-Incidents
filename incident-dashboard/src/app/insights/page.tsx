@@ -17,27 +17,17 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { onIdTokenChanged } from "firebase/auth";
+import { buildIncidentInsights } from "@/lib/insights";
 
 const COLORS = ["#5ed7ff", "#7cf7c4", "#ffd166", "#ff6b6b", "#b48cff"];
-
-type InsightsPayload = {
-  total: number;
-  trend: { date: string; count: number }[];
-  stateBars: { name: string; value: number }[];
-  priorityPie: { name: string; value: number }[];
-  topShort: { name: string; value: number }[];
-  topAssignment: { name: string; value: number }[];
-  debugOpenedSamples?: { raw: any; parsed: string | null; type: string }[];
-};
 
 export default function InsightsPage() {
   const [user, setUser] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [insights, setInsights] = useState<InsightsPayload | null>(null);
-  const [sourceCount, setSourceCount] = useState(0);
+  const [incidents, setIncidents] = useState<any[]>([]);
 
   useEffect(() => {
     const unsub = onIdTokenChanged(auth, (u) => {
@@ -49,16 +39,21 @@ export default function InsightsPage() {
 
   useEffect(() => {
     if (!authReady || !user) return;
-    const ref = doc(db, "insights", "latest");
-    const unsub = onSnapshot(ref, (snap) => {
-      const data = snap.data() as any;
-      setInsights(data?.insights || null);
-      setSourceCount(data?.insights?.total || 0);
+    const q = collection(db, "incidents");
+    const unsub = onSnapshot(q, (snap) => {
+      const items: any[] = [];
+      snap.forEach((docSnap) => {
+        items.push({
+          id: docSnap.id,
+          ...docSnap.data(),
+        });
+      });
+      setIncidents(items);
     });
     return () => unsub();
   }, [authReady, user]);
 
-  const metrics = useMemo(() => insights, [insights]);
+  const metrics = useMemo(() => buildIncidentInsights(incidents), [incidents]);
 
   if (!user) {
     return (
@@ -99,183 +94,255 @@ export default function InsightsPage() {
           <div>
             <div className="section-title">Insights</div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
-              Shary Incident Analytics
+              Incident Operations Analytics
             </div>
           </div>
         </div>
 
-        {!metrics && (
+        {metrics.total === 0 ? (
           <div className="card">
-            <div className="chip">
-              No insights found. Upload the Excel file in /import to generate
-              insights.
-            </div>
+            <div className="chip">No incidents found in Firestore.</div>
           </div>
-        )}
-        {metrics?.debugOpenedSamples?.length ? (
-          <div className="card">
-            <div className="section-title">Debug Opened Samples</div>
-            <div className="table-wrap">
-              <table className="insights-table">
-                <thead>
-                  <tr>
-                    <th>Raw</th>
-                    <th>Parsed</th>
-                    <th>Type</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metrics.debugOpenedSamples.map((row: any, idx: number) => (
-                    <tr key={idx}>
-                      <td>{String(row.raw)}</td>
-                      <td>{row.parsed || "null"}</td>
-                      <td>{row.type}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : null}
-        {metrics && (
-          <div className="insights-kpis">
-          <div className="card kpi-card">
-            <div className="kpi-title">Total Incidents</div>
-            <div className="kpi-value">{metrics.total}</div>
-          </div>
-          <div className="card kpi-card">
-            <div className="kpi-title">Top Category</div>
-            <div className="kpi-value">
-              {metrics.topShort[0]?.name || "—"}
-            </div>
-          </div>
-          <div className="card kpi-card">
-            <div className="kpi-title">Top Assignment Group</div>
-            <div className="kpi-value">
-              {metrics.topAssignment[0]?.name || "—"}
-            </div>
-          </div>
-        </div>
-        )}
-
-        {metrics && (
-          <div className="insights-grid">
-          <div className="card chart-card">
-            <div className="section-title">Incident Trend</div>
-            <div className="chart-wrap">
-              {metrics.trend.length === 0 ? (
-                <div className="chip">
-                  No trend data. Check that the Opened column is parsed.
+        ) : (
+          <>
+            <div className="insights-kpis">
+              <div className="card kpi-card">
+                <div className="kpi-title">Total Incidents</div>
+                <div className="kpi-value">{metrics.total}</div>
+              </div>
+              <div className="card kpi-card">
+                <div className="kpi-title">Resolved Rate</div>
+                <div className="kpi-value">{metrics.resolvedRate}%</div>
+              </div>
+              <div className="card kpi-card">
+                <div className="kpi-title">Avg Days to Resolve</div>
+                <div className="kpi-value">{metrics.avgResolutionDays}</div>
+              </div>
+              <div className="card kpi-card">
+                <div className="kpi-title">Median Days to Resolve</div>
+                <div className="kpi-value">{metrics.medianResolutionDays}</div>
+              </div>
+              <div className="card kpi-card">
+                <div className="kpi-title">Open Over 3 Days</div>
+                <div className="kpi-value">{metrics.oldOpenCount}</div>
+              </div>
+              <div className="card kpi-card">
+                <div className="kpi-title">Avg Contact Attempts</div>
+                <div className="kpi-value">
+                  {(metrics.avgCalls + metrics.avgNoAnswer).toFixed(2)}
                 </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={metrics.trend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="count" stroke="#5ed7ff" />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
+              </div>
             </div>
-          </div>
 
-          <div className="card chart-card">
-            <div className="section-title">By State</div>
-            <div className="chart-wrap">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={metrics.stateBars}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#7cf7c4" />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="card chart-card">
+              <div className="section-title">Detected Patterns</div>
+              <div style={{ marginTop: 8 }}>
+                {metrics.patterns.length ? (
+                  metrics.patterns.map((p) => (
+                    <div key={p} className="comment" style={{ marginBottom: 8 }}>
+                      {p}
+                    </div>
+                  ))
+                ) : (
+                  <div className="chip">Not enough data yet for strong patterns.</div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="card chart-card">
-            <div className="section-title">Priority Split</div>
-            <div className="chart-wrap">
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={metrics.priorityPie}
-                    dataKey="value"
-                    nameKey="name"
-                    outerRadius={90}
-                    innerRadius={50}
-                  >
-                    {metrics.priorityPie.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
+            <div className="insights-grid">
+              <div className="card chart-card">
+                <div className="section-title">Opened vs Resolved Trend</div>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={metrics.trend}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="opened"
+                        stroke="#4cc9f0"
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
                       />
-                    ))}
-                  </Pie>
-                  <Legend />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+                      <Line
+                        type="monotone"
+                        dataKey="resolved"
+                        stroke="#ff8a3d"
+                        strokeWidth={3}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
 
-          <div className="card chart-card">
-            <div className="section-title">Top Issues</div>
-            <div className="table-wrap">
-              <table className="insights-table">
-                <thead>
-                  <tr>
-                    <th>Issue</th>
-                    <th>Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metrics.topShort.map((row) => (
-                    <tr key={row.name}>
-                      <td>{row.name}</td>
-                      <td>{row.value}</td>
-                    </tr>
-                  ))}
-                  {metrics.topShort.length === 0 && (
-                    <tr>
-                      <td colSpan={2}>No data</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+              <div className="card chart-card">
+                <div className="section-title">Status Split</div>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={metrics.statusPie}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={90}
+                        innerRadius={52}
+                      >
+                        {metrics.statusPie.map((_, index) => (
+                          <Cell
+                            key={`status-${index}`}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Legend />
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
 
-          <div className="card chart-card">
-            <div className="section-title">Top Assignment Groups</div>
-            <div className="table-wrap">
-              <table className="insights-table">
-                <thead>
-                  <tr>
-                    <th>Group</th>
-                    <th>Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metrics.topAssignment.map((row) => (
-                    <tr key={row.name}>
-                      <td>{row.name}</td>
-                      <td>{row.value}</td>
-                    </tr>
-                  ))}
-                  {metrics.topAssignment.length === 0 && (
-                    <tr>
-                      <td colSpan={2}>No data</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <div className="card chart-card">
+                <div className="section-title">State Distribution</div>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={metrics.stateBars}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#7cf7c4" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="card chart-card">
+                <div className="section-title">Avg Resolution Days by State</div>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={metrics.resolutionByState}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="avgDays" fill="#ffd166" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="card chart-card">
+                <div className="section-title">Contact Effort Pattern</div>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={metrics.effortBars}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="bucket" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#b48cff" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="card chart-card">
+                <div className="section-title">Effort Bucket Resolve Rate (%)</div>
+                <div className="chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={metrics.effortBars}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="bucket" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="resolvedRate" fill="#5ed7ff" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="card chart-card">
+                <div className="section-title">Top Assignment Groups</div>
+                <div className="table-wrap">
+                  <table className="insights-table">
+                    <thead>
+                      <tr>
+                        <th>Group</th>
+                        <th>Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.topAssignment.map((row) => (
+                        <tr key={row.name}>
+                          <td>{row.name}</td>
+                          <td>{row.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="card chart-card">
+                <div className="section-title">Oldest Open Incidents</div>
+                <div className="table-wrap">
+                  <table className="insights-table">
+                    <thead>
+                      <tr>
+                        <th>Incident</th>
+                        <th>State</th>
+                        <th>Age (days)</th>
+                        <th>Ops Help</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.oldestOpen.map((row, idx) => (
+                        <tr key={`${row.number}-${row.openedAt}-${idx}`}>
+                          <td>{row.number}</td>
+                          <td>{row.state}</td>
+                          <td>{row.ageDays}</td>
+                          <td>{row.opsHelp ? "Yes" : "No"}</td>
+                        </tr>
+                      ))}
+                      {metrics.oldestOpen.length === 0 ? (
+                        <tr>
+                          <td colSpan={4}>No open incidents.</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="card chart-card">
+                <div className="section-title">Top Issue Types</div>
+                <div className="table-wrap">
+                  <table className="insights-table">
+                    <thead>
+                      <tr>
+                        <th>Issue</th>
+                        <th>Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.topIssues.map((row) => (
+                        <tr key={row.name}>
+                          <td>{row.name}</td>
+                          <td>{row.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
         )}
       </main>
     </div>

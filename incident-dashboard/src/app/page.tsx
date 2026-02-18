@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   onAuthStateChanged,
@@ -21,6 +21,13 @@ import { auth, db } from "@/lib/firebase";
 import type { Comment, CommentType, Incident, SummaryStructured } from "@/lib/types";
 
 const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+const COMMENT_MAX_LENGTH = 500;
+const QUICK_COMMENT_TEMPLATES = [
+  "Called user",
+  "No answer",
+  "Waiting for user",
+  "Escalated to Ops",
+];
 
 function parseOpenedAt(value?: string) {
   if (!value) return null;
@@ -142,10 +149,13 @@ export default function Home() {
   const [commentType, setCommentType] = useState<CommentType>("ops");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [incidentQuery, setIncidentQuery] = useState("");
   const [incidentFilter, setIncidentFilter] = useState<
     "all" | "assigned" | "resolved" | "in_progress" | "hold"
   >("all");
+  const commentChars = commentText.length;
+  const isCommentValid = commentText.trim().length > 0 && commentChars <= COMMENT_MAX_LENGTH;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -326,7 +336,7 @@ export default function Home() {
 
 
   async function addComment() {
-    if (!activeIncident || !commentText.trim() || !user) return;
+    if (!activeIncident || !isCommentValid || !user) return;
     await addDoc(collection(db, "incidents", activeIncident.id, "comments"), {
       text: commentText.trim(),
       type: commentType,
@@ -337,6 +347,15 @@ export default function Home() {
     });
     await addLog(`Comment added (${commentType.toUpperCase()}).`);
     setCommentText("");
+  }
+
+  useEffect(() => {
+    commentInputRef.current?.focus();
+  }, [commentType]);
+
+  function applyTemplate(template: string) {
+    setCommentText((prev) => (prev.trim() ? `${prev}\n${template}` : template));
+    commentInputRef.current?.focus();
   }
 
   async function saveCommentEdit(id: string) {
@@ -632,47 +651,95 @@ export default function Home() {
             )}
           </section>
 
-          <section className="card">
+          <section className="card ops-card">
             {activeIncident ? (
               <>
                 <div className="section-title">Operations Controls</div>
-                <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
-                  <button
-                    className={`button primary ${
-                      activeIncident.status === "resolved" ? "resolved" : ""
-                    }`}
-                    onClick={toggleResolved}
-                  >
-                    {activeIncident.status === "resolved"
-                      ? "Mark Unresolved"
-                      : "Mark Resolved"}
-                  </button>
-                  <button
-                    className={`button ${
-                      activeIncident.opsHelp ? "danger" : ""
-                    }`}
-                    onClick={toggleOpsHelp}
-                  >
-                    {activeIncident.opsHelp
-                      ? "Clear Ops Help"
-                      : "Request Ops Help"}
-                  </button>
-                  <div className="count-box">
-                    <div className="chip">Calls</div>
-                    <button className="button" onClick={() => updateCounts("callAttempts", -1)}>-</button>
-                    <button className="button" onClick={() => updateCounts("callAttempts", 1)}>+</button>
-                    <div className="count">{activeIncident.callAttempts || 0}</div>
+                <div className="ops-layout">
+                  <div className="ops-section">
+                    <div className="ops-heading">Incident Status</div>
+                    <div className="ops-badges">
+                      <div className="status-badge badge-state">
+                        State: {activeIncident.state || "In Progress"}
+                      </div>
+                      <div className="status-badge badge-status">
+                        Status: {activeIncident.status === "resolved" ? "Resolved" : "Open"}
+                      </div>
+                      <div className="status-badge badge-ops">
+                        Ops Help: {activeIncident.opsHelp ? "Requested" : "Not Requested"}
+                      </div>
+                    </div>
+                    <div className="ops-action-grid">
+                      <button
+                        className={`button primary ${
+                          activeIncident.status === "resolved" ? "resolved" : ""
+                        }`}
+                        onClick={toggleResolved}
+                      >
+                        {activeIncident.status === "resolved"
+                          ? "Mark Unresolved"
+                          : "Mark Resolved"}
+                      </button>
+                      <button
+                        className={`button ${activeIncident.opsHelp ? "danger" : "warning"}`}
+                        onClick={toggleOpsHelp}
+                      >
+                        {activeIncident.opsHelp
+                          ? "Remove Ops Flag"
+                          : "Request Ops Help"}
+                      </button>
+                    </div>
                   </div>
-                  <div className="count-box">
-                    <div className="chip">Didn’t Pick Up</div>
-                    <button className="button" onClick={() => updateCounts("noAnswerCount", -1)}>-</button>
-                    <button className="button" onClick={() => updateCounts("noAnswerCount", 1)}>+</button>
-                    <div className="count">{activeIncident.noAnswerCount || 0}</div>
+
+                  <div className="ops-section">
+                    <div className="ops-heading">Contact Attempts</div>
+                    <div className="attempt-grid">
+                      <div className="attempt-card">
+                        <div className="attempt-title">Calls</div>
+                        <div className="attempt-value">{activeIncident.callAttempts || 0}</div>
+                        <div className="attempt-controls">
+                          <button
+                            className="button icon-button"
+                            onClick={() => updateCounts("callAttempts", -1)}
+                            aria-label="Decrease calls"
+                          >
+                            -
+                          </button>
+                          <button
+                            className="button icon-button"
+                            onClick={() => updateCounts("callAttempts", 1)}
+                            aria-label="Increase calls"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div className="attempt-card">
+                        <div className="attempt-title">Didn’t Pick Up</div>
+                        <div className="attempt-value">{activeIncident.noAnswerCount || 0}</div>
+                        <div className="attempt-controls">
+                          <button
+                            className="button icon-button"
+                            onClick={() => updateCounts("noAnswerCount", -1)}
+                            aria-label="Decrease no answer count"
+                          >
+                            -
+                          </button>
+                          <button
+                            className="button icon-button"
+                            onClick={() => updateCounts("noAnswerCount", 1)}
+                            aria-label="Increase no answer count"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ marginTop: 16 }}>
-                  <div className="section-title">Add Comment</div>
+                <div className="ops-section ops-section-spaced">
+                  <div className="ops-heading">Comment Composer</div>
                   <select
                     className="select"
                     value={commentType}
@@ -682,26 +749,57 @@ export default function Home() {
                     <option value="pm">Project Manager Comment</option>
                     <option value="dev">Developer Comment</option>
                   </select>
+                  <div className="template-row">
+                    {QUICK_COMMENT_TEMPLATES.map((template) => (
+                      <button
+                        key={template}
+                        className="button template-chip"
+                        onClick={() => applyTemplate(template)}
+                      >
+                        {template}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
+                    ref={commentInputRef}
                     className="textarea"
                     rows={4}
+                    maxLength={COMMENT_MAX_LENGTH}
                     placeholder="Add your update..."
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     style={{ marginTop: 8 }}
                   />
-                  <button className="button" onClick={addComment} style={{ marginTop: 8 }}>
+                  <div className="char-counter">
+                    {commentChars}/{COMMENT_MAX_LENGTH}
+                  </div>
+                  <button
+                    className="button comment-submit"
+                    onClick={addComment}
+                    disabled={!isCommentValid}
+                  >
                     Add Comment
                   </button>
                 </div>
 
-                <div style={{ marginTop: 16 }}>
-                  <div className="section-title">Comments</div>
+                <div className="ops-section ops-section-spaced">
+                  <div className="ops-heading">Comment Timeline</div>
                   {comments.map((c) => (
                     <div key={c.id} className="comment">
                       <div className="comment-header">
-                        <div>
-                          {c.authorName} • {c.type.toUpperCase()} • {new Date(c.createdAt).toLocaleString()}
+                        <div className="comment-meta">
+                          <div className="comment-avatar">
+                            {(c.authorName || "U").slice(0, 1).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="comment-author-row">
+                              <span>{c.authorName || "User"}</span>
+                              <span className={`role-tag role-${c.type}`}>
+                                {c.type.toUpperCase()}
+                              </span>
+                            </div>
+                            <div>{new Date(c.createdAt).toLocaleString()}</div>
+                          </div>
                         </div>
                         <div className="comment-actions">
                           {editingCommentId === c.id ? (
@@ -710,10 +808,28 @@ export default function Home() {
                               <button className="button" onClick={() => { setEditingCommentId(null); setEditingText(""); }}>Cancel</button>
                             </>
                           ) : (
-                            <>
-                              <button className="button" onClick={() => { setEditingCommentId(c.id); setEditingText(c.text); }}>Edit</button>
-                              <button className="button danger" onClick={() => removeComment(c.id)}>Delete</button>
-                            </>
+                            <details className="comment-menu">
+                              <summary className="button icon-button menu-trigger" aria-label="Comment actions">
+                                ...
+                              </summary>
+                              <div className="comment-menu-list">
+                                <button
+                                  className="menu-item"
+                                  onClick={() => {
+                                    setEditingCommentId(c.id);
+                                    setEditingText(c.text);
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="menu-item danger-text"
+                                  onClick={() => removeComment(c.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </details>
                           )}
                         </div>
                       </div>
