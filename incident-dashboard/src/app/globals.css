@@ -54,6 +54,8 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  width: 100%;
+  overflow-x: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: "Space Grotesk", system-ui, sans-serif;
@@ -72,6 +74,7 @@ button, input, textarea, select {
   height: 100vh;
   gap: 16px;
   padding: 16px;
+  min-width: 0;
 }
 
 .panel {
@@ -79,6 +82,7 @@ button, input, textarea, select {
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .sidebar {
@@ -86,6 +90,7 @@ button, input, textarea, select {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
+  min-width: 0;
 }
 
 .brand {
@@ -333,6 +338,7 @@ button, input, textarea, select {
   grid-template-rows: auto 1fr;
   gap: 12px;
   padding: 16px;
+  min-width: 0;
 }
 
 .topbar {
@@ -724,6 +730,9 @@ button, input, textarea, select {
   border-radius: 999px;
   padding: 4px;
   gap: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
 .tab {
@@ -744,6 +753,7 @@ button, input, textarea, select {
   grid-template-columns: 1.1fr 0.9fr;
   gap: 12px;
   height: calc(100vh - 140px);
+  min-width: 0;
 }
 
 .card {
@@ -752,12 +762,21 @@ button, input, textarea, select {
   border-radius: 14px;
   padding: 14px;
   overflow: auto;
+  min-width: 0;
 }
 
 .ops-card {
   background:
     radial-gradient(circle at 94% 4%, rgba(94, 215, 255, 0.06), transparent 28%),
     #0d1423;
+}
+
+.ops-drawer-fab {
+  display: none;
+}
+
+.ops-drawer-backdrop {
+  display: none;
 }
 
 .ops-layout {
@@ -794,6 +813,71 @@ button, input, textarea, select {
   margin-bottom: 12px;
 }
 
+.status-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(57, 76, 110, 0.7);
+  background: rgba(14, 24, 38, 0.85);
+}
+
+.status-state-row {
+  border-color: rgba(106, 227, 255, 0.45);
+  background: rgba(36, 82, 122, 0.18);
+}
+
+.status-status-row {
+  border-color: rgba(139, 123, 255, 0.45);
+  background: rgba(76, 66, 136, 0.18);
+}
+
+.status-ops-row {
+  border-color: rgba(255, 184, 77, 0.45);
+  background: rgba(117, 81, 28, 0.2);
+}
+
+.status-key {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9fb2c8;
+}
+
+.status-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e7eef9;
+}
+
+.status-state-value {
+  color: #c8efff;
+}
+
+.status-open-value {
+  color: #d6cbff;
+}
+
+.status-resolved-value {
+  color: #c7f5de;
+}
+
+.status-ops-requested-value {
+  color: #ffe4b3;
+}
+
+.status-ops-idle-value {
+  color: #f3d6a3;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -827,9 +911,13 @@ button, input, textarea, select {
   gap: 10px;
 }
 
+.ops-action-grid.status-actions {
+  grid-template-columns: 1fr;
+}
+
 .attempt-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -861,6 +949,8 @@ button, input, textarea, select {
 .attempt-controls {
   display: inline-flex;
   gap: 10px;
+  flex-direction: row;
+  align-items: center;
 }
 
 .icon-button {
@@ -881,6 +971,7 @@ button, input, textarea, select {
   font-weight: 700;
   line-height: 1;
 }
+
 
 .menu-trigger {
   width: 34px;
@@ -969,6 +1060,8 @@ button, input, textarea, select {
   line-height: 1.6;
   color: #e6eef9;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .kv {
@@ -1013,6 +1106,11 @@ button, input, textarea, select {
 .timeline {
   margin: 0;
   padding-left: 18px;
+}
+
+.timeline li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .comment {
@@ -1234,6 +1332,34 @@ button, input, textarea, select {
 @media (max-width: 1100px) {
   .page { grid-template-columns: 1fr; height: auto; }
   .content { grid-template-columns: 1fr; height: auto; }
+  .insights-page .sidebar {
+    min-height: auto;
+    height: auto;
+    padding: 12px;
+    gap: 8px;
+  }
+  .insights-page .sidebar .sidebar-section {
+    gap: 6px;
+  }
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+    border-radius: 12px;
+  }
+  .tab {
+    min-width: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 7px 8px;
+  }
   .list { max-height: 320px; }
   .incident-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
   .incident-tab { white-space: nowrap; }
@@ -1249,6 +1375,51 @@ button, input, textarea, select {
   .ops-layout { grid-template-columns: 1fr; }
   .ops-action-grid { grid-template-columns: 1fr; }
   .attempt-grid { grid-template-columns: 1fr; }
+  .ops-desktop-card { display: none; }
+  .ops-drawer-fab {
+    display: inline-flex;
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 70;
+  }
+  .main {
+    padding-bottom: 88px;
+  }
+  .ops-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 11, 20, 0.7);
+    backdrop-filter: blur(2px);
+    z-index: 80;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+  .ops-drawer {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+  }
+  .ops-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: #11192a;
+  }
+  .ops-drawer-body {
+    padding: 12px;
+    overflow: auto;
+  }
   .modal-card { max-height: 94vh; }
   .modal-header,
   .modal-footer,

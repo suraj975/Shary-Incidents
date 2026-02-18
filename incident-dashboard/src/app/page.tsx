@@ -154,6 +154,7 @@ export default function Home() {
   const [incidentFilter, setIncidentFilter] = useState<
     "all" | "assigned" | "resolved" | "in_progress" | "hold"
   >("all");
+  const [opsDrawerOpen, setOpsDrawerOpen] = useState(false);
   const commentChars = commentText.length;
   const isCommentValid = commentText.trim().length > 0 && commentChars <= COMMENT_MAX_LENGTH;
 
@@ -296,6 +297,10 @@ export default function Home() {
   }, [activeIncident]);
 
   useEffect(() => {
+    setOpsDrawerOpen(false);
+  }, [activeId]);
+
+  useEffect(() => {
     if (!activeIncident) return;
     const q = collection(db, "incidents", activeIncident.id, "logs");
     const unsub = onSnapshot(q, (snap) => {
@@ -408,6 +413,226 @@ export default function Home() {
     });
     await addLog(next ? "Ops help requested." : "Ops help cleared.");
   }
+
+  const operationsPanel = activeIncident ? (
+    <>
+      <div className="section-title">Operations Controls</div>
+      <div className="ops-layout">
+        <div className="ops-section">
+          <div className="ops-heading">Incident Status</div>
+          <div className="status-list">
+            <div className="status-row status-state-row">
+              <span className="status-key">State</span>
+              <span className="status-value status-state-value">
+                {activeIncident.state || "In Progress"}
+              </span>
+            </div>
+            <div className="status-row status-status-row">
+              <span className="status-key">Status</span>
+              <span
+                className={`status-value ${
+                  activeIncident.status === "resolved"
+                    ? "status-resolved-value"
+                    : "status-open-value"
+                }`}
+              >
+                {activeIncident.status === "resolved" ? "Resolved" : "Open"}
+              </span>
+            </div>
+            <div className="status-row status-ops-row">
+              <span className="status-key">Ops Help</span>
+              <span
+                className={`status-value ${
+                  activeIncident.opsHelp
+                    ? "status-ops-requested-value"
+                    : "status-ops-idle-value"
+                }`}
+              >
+                {activeIncident.opsHelp ? "Requested" : "Not Requested"}
+              </span>
+            </div>
+          </div>
+          <div className="ops-action-grid status-actions">
+            <button
+              className={`button primary ${
+                activeIncident.status === "resolved" ? "resolved" : ""
+              }`}
+              onClick={toggleResolved}
+            >
+              {activeIncident.status === "resolved"
+                ? "Mark Unresolved"
+                : "Mark Resolved"}
+            </button>
+            <button
+              className={`button ${activeIncident.opsHelp ? "danger" : "warning"}`}
+              onClick={toggleOpsHelp}
+            >
+              {activeIncident.opsHelp ? "Remove Ops Flag" : "Request Ops Help"}
+            </button>
+          </div>
+        </div>
+
+        <div className="ops-section">
+          <div className="ops-heading">Contact Attempts</div>
+          <div className="attempt-grid">
+            <div className="attempt-card attempt-calls">
+              <div className="attempt-title">Calls</div>
+              <div className="attempt-value">{activeIncident.callAttempts || 0}</div>
+              <div className="attempt-controls">
+                <button
+                  className="button icon-button icon-minus"
+                  onClick={() => updateCounts("callAttempts", -1)}
+                  aria-label="Decrease calls"
+                >
+                  -
+                </button>
+                <button
+                  className="button icon-button icon-plus"
+                  onClick={() => updateCounts("callAttempts", 1)}
+                  aria-label="Increase calls"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="attempt-card attempt-no-answer">
+              <div className="attempt-title">Didn’t Pick Up</div>
+              <div className="attempt-value">{activeIncident.noAnswerCount || 0}</div>
+              <div className="attempt-controls">
+                <button
+                  className="button icon-button icon-minus"
+                  onClick={() => updateCounts("noAnswerCount", -1)}
+                  aria-label="Decrease no answer count"
+                >
+                  -
+                </button>
+                <button
+                  className="button icon-button icon-plus"
+                  onClick={() => updateCounts("noAnswerCount", 1)}
+                  aria-label="Increase no answer count"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ops-section ops-section-spaced">
+        <div className="ops-heading">Comment Composer</div>
+        <select
+          className="select"
+          value={commentType}
+          onChange={(e) => setCommentType(e.target.value as CommentType)}
+        >
+          <option value="ops">Operations Comment</option>
+          <option value="pm">Project Manager Comment</option>
+          <option value="dev">Developer Comment</option>
+        </select>
+        <div className="template-row">
+          {QUICK_COMMENT_TEMPLATES.map((template) => (
+            <button
+              key={template}
+              className="button template-chip"
+              onClick={() => applyTemplate(template)}
+            >
+              {template}
+            </button>
+          ))}
+        </div>
+        <textarea
+          ref={commentInputRef}
+          className="textarea"
+          rows={4}
+          maxLength={COMMENT_MAX_LENGTH}
+          placeholder="Add your update..."
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          style={{ marginTop: 8 }}
+        />
+        <div className="char-counter">
+          {commentChars}/{COMMENT_MAX_LENGTH}
+        </div>
+        <button
+          className="button comment-submit"
+          onClick={addComment}
+          disabled={!isCommentValid}
+        >
+          Add Comment
+        </button>
+      </div>
+
+      <div className="ops-section ops-section-spaced">
+        <div className="ops-heading">Comment Timeline</div>
+        {comments.map((c) => (
+          <div key={c.id} className="comment">
+            <div className="comment-header">
+              <div className="comment-meta">
+                <div className="comment-avatar">
+                  {(c.authorName || "U").slice(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <div className="comment-author-row">
+                    <span>{c.authorName || "User"}</span>
+                    <span className={`role-tag role-${c.type}`}>
+                      {c.type.toUpperCase()}
+                    </span>
+                  </div>
+                  <div>{new Date(c.createdAt).toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="comment-actions">
+                {editingCommentId === c.id ? (
+                  <>
+                    <button className="button" onClick={() => saveCommentEdit(c.id)}>Save</button>
+                    <button className="button" onClick={() => { setEditingCommentId(null); setEditingText(""); }}>Cancel</button>
+                  </>
+                ) : (
+                  <details className="comment-menu">
+                    <summary className="button icon-button menu-trigger" aria-label="Comment actions">
+                      ...
+                    </summary>
+                    <div className="comment-menu-list">
+                      <button
+                        className="menu-item"
+                        onClick={() => {
+                          setEditingCommentId(c.id);
+                          setEditingText(c.text);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="menu-item danger-text"
+                        onClick={() => removeComment(c.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </details>
+                )}
+              </div>
+            </div>
+            {editingCommentId === c.id ? (
+              <textarea
+                className="textarea"
+                rows={3}
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                style={{ marginTop: 8 }}
+              />
+            ) : (
+              <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{c.text}</div>
+            )}
+          </div>
+        ))}
+        {comments.length === 0 && <div className="chip">No comments yet.</div>}
+      </div>
+    </>
+  ) : (
+    <div className="chip">Select an incident to manage operations.</div>
+  );
 
   if (!user) {
     return (
@@ -651,211 +876,32 @@ export default function Home() {
             )}
           </section>
 
-          <section className="card ops-card">
-            {activeIncident ? (
-              <>
-                <div className="section-title">Operations Controls</div>
-                <div className="ops-layout">
-                  <div className="ops-section">
-                    <div className="ops-heading">Incident Status</div>
-                    <div className="ops-badges">
-                      <div className="status-badge badge-state">
-                        State: {activeIncident.state || "In Progress"}
-                      </div>
-                      <div className="status-badge badge-status">
-                        Status: {activeIncident.status === "resolved" ? "Resolved" : "Open"}
-                      </div>
-                      <div className="status-badge badge-ops">
-                        Ops Help: {activeIncident.opsHelp ? "Requested" : "Not Requested"}
-                      </div>
-                    </div>
-                    <div className="ops-action-grid">
-                      <button
-                        className={`button primary ${
-                          activeIncident.status === "resolved" ? "resolved" : ""
-                        }`}
-                        onClick={toggleResolved}
-                      >
-                        {activeIncident.status === "resolved"
-                          ? "Mark Unresolved"
-                          : "Mark Resolved"}
-                      </button>
-                      <button
-                        className={`button ${activeIncident.opsHelp ? "danger" : "warning"}`}
-                        onClick={toggleOpsHelp}
-                      >
-                        {activeIncident.opsHelp
-                          ? "Remove Ops Flag"
-                          : "Request Ops Help"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="ops-section">
-                    <div className="ops-heading">Contact Attempts</div>
-                    <div className="attempt-grid">
-                      <div className="attempt-card">
-                        <div className="attempt-title">Calls</div>
-                        <div className="attempt-value">{activeIncident.callAttempts || 0}</div>
-                        <div className="attempt-controls">
-                          <button
-                            className="button icon-button"
-                            onClick={() => updateCounts("callAttempts", -1)}
-                            aria-label="Decrease calls"
-                          >
-                            -
-                          </button>
-                          <button
-                            className="button icon-button"
-                            onClick={() => updateCounts("callAttempts", 1)}
-                            aria-label="Increase calls"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                      <div className="attempt-card">
-                        <div className="attempt-title">Didn’t Pick Up</div>
-                        <div className="attempt-value">{activeIncident.noAnswerCount || 0}</div>
-                        <div className="attempt-controls">
-                          <button
-                            className="button icon-button"
-                            onClick={() => updateCounts("noAnswerCount", -1)}
-                            aria-label="Decrease no answer count"
-                          >
-                            -
-                          </button>
-                          <button
-                            className="button icon-button"
-                            onClick={() => updateCounts("noAnswerCount", 1)}
-                            aria-label="Increase no answer count"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="ops-section ops-section-spaced">
-                  <div className="ops-heading">Comment Composer</div>
-                  <select
-                    className="select"
-                    value={commentType}
-                    onChange={(e) => setCommentType(e.target.value as CommentType)}
-                  >
-                    <option value="ops">Operations Comment</option>
-                    <option value="pm">Project Manager Comment</option>
-                    <option value="dev">Developer Comment</option>
-                  </select>
-                  <div className="template-row">
-                    {QUICK_COMMENT_TEMPLATES.map((template) => (
-                      <button
-                        key={template}
-                        className="button template-chip"
-                        onClick={() => applyTemplate(template)}
-                      >
-                        {template}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    ref={commentInputRef}
-                    className="textarea"
-                    rows={4}
-                    maxLength={COMMENT_MAX_LENGTH}
-                    placeholder="Add your update..."
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    style={{ marginTop: 8 }}
-                  />
-                  <div className="char-counter">
-                    {commentChars}/{COMMENT_MAX_LENGTH}
-                  </div>
-                  <button
-                    className="button comment-submit"
-                    onClick={addComment}
-                    disabled={!isCommentValid}
-                  >
-                    Add Comment
-                  </button>
-                </div>
-
-                <div className="ops-section ops-section-spaced">
-                  <div className="ops-heading">Comment Timeline</div>
-                  {comments.map((c) => (
-                    <div key={c.id} className="comment">
-                      <div className="comment-header">
-                        <div className="comment-meta">
-                          <div className="comment-avatar">
-                            {(c.authorName || "U").slice(0, 1).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="comment-author-row">
-                              <span>{c.authorName || "User"}</span>
-                              <span className={`role-tag role-${c.type}`}>
-                                {c.type.toUpperCase()}
-                              </span>
-                            </div>
-                            <div>{new Date(c.createdAt).toLocaleString()}</div>
-                          </div>
-                        </div>
-                        <div className="comment-actions">
-                          {editingCommentId === c.id ? (
-                            <>
-                              <button className="button" onClick={() => saveCommentEdit(c.id)}>Save</button>
-                              <button className="button" onClick={() => { setEditingCommentId(null); setEditingText(""); }}>Cancel</button>
-                            </>
-                          ) : (
-                            <details className="comment-menu">
-                              <summary className="button icon-button menu-trigger" aria-label="Comment actions">
-                                ...
-                              </summary>
-                              <div className="comment-menu-list">
-                                <button
-                                  className="menu-item"
-                                  onClick={() => {
-                                    setEditingCommentId(c.id);
-                                    setEditingText(c.text);
-                                  }}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="menu-item danger-text"
-                                  onClick={() => removeComment(c.id)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </details>
-                          )}
-                        </div>
-                      </div>
-                      {editingCommentId === c.id ? (
-                        <textarea
-                          className="textarea"
-                          rows={3}
-                          value={editingText}
-                          onChange={(e) => setEditingText(e.target.value)}
-                          style={{ marginTop: 8 }}
-                        />
-                      ) : (
-                        <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{c.text}</div>
-                      )}
-                    </div>
-                  ))}
-                  {comments.length === 0 && <div className="chip">No comments yet.</div>}
-                </div>
-
-              </>
-            ) : (
-              <div className="chip">Select an incident to manage operations.</div>
-            )}
+          <section className="card ops-card ops-desktop-card">
+            {operationsPanel}
           </section>
         </div>
+
+        <button
+          className="button primary ops-drawer-fab"
+          onClick={() => setOpsDrawerOpen(true)}
+        >
+          Operations
+        </button>
       </main>
+
+      {opsDrawerOpen ? (
+        <div className="ops-drawer-backdrop" onClick={() => setOpsDrawerOpen(false)}>
+          <div className="panel ops-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="ops-drawer-header">
+              <div className="section-title">Operations Controls</div>
+              <button className="button" onClick={() => setOpsDrawerOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="ops-drawer-body">{operationsPanel}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
