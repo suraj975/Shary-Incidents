@@ -86,6 +86,9 @@ export default function InsightsPage() {
           <Link className="button" href="/">
             Back to Dashboard
           </Link>
+          <Link className="button primary" href="/insights/export">
+            Export Studio
+          </Link>
         </div>
       </aside>
 
@@ -96,6 +99,11 @@ export default function InsightsPage() {
             <div style={{ fontSize: 20, fontWeight: 700 }}>
               Incident Operations Analytics
             </div>
+          </div>
+          <div className="topbar-actions">
+            <Link className="button primary" href="/insights/export">
+              Download Excel
+            </Link>
           </div>
         </div>
 
