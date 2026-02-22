@@ -106,7 +106,7 @@ async function resolveStorageUrl(rawUrl: string) {
   }
 }
 
-function renderSummary(structured?: SummaryStructured | null, fallback?: string) {
+function renderSummary(structured?: SummaryStructured | null, fallback?: string, fallbackRaw?: any) {
   if (structured) {
     return (
       <>
@@ -174,7 +174,26 @@ function renderSummary(structured?: SummaryStructured | null, fallback?: string)
 
   if (!fallback) return <div className="chip">No summary available.</div>;
 
-  const lines = fallback.split(/\r?\n/);
+  // If fallback looks like JSON, pretty-print it so raw objects don't show as one huge line.
+  let text = fallback;
+  if (!fallback.trim().includes("\n") && fallback.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(fallback);
+      text = JSON.stringify(parsed, null, 2);
+    } catch {
+      text = fallback;
+    }
+  }
+
+  // If a structured summary exists inside raw but not promoted, use it.
+  if (!structured && fallbackRaw && typeof fallbackRaw === "object") {
+    const maybeStructured = (fallbackRaw as any).summaryStructured || (fallbackRaw as any).summary_structured;
+    if (maybeStructured && typeof maybeStructured === "object") {
+      return renderSummary(maybeStructured as any, undefined, undefined);
+    }
+  }
+
+  const lines = text.split(/\r?\n/);
   const sections: { title: string; body: string[] }[] = [];
   let current = { title: "Summary", body: [] as string[] };
   const headingRegex =
@@ -375,20 +394,37 @@ export default function Home() {
       })
       .filter(Boolean);
 
-    // Merge and dedupe by fileName + url/href/link to avoid repeats in the UI
+    // Merge, preferring CDN (has URL) over raw copies with no URL, dedupe by fileName (case-insensitive)
+    // Merge; dedupe strictly by filename (case-insensitive). Prefer a CDN URL, then signed/link, then base64.
     const combined = [...cdn, ...detailAttachments, ...parsedSummary];
-    const seen = new Set<string>();
-    const deduped: Attachment[] = [];
+    const byName = new Map<string, Attachment>();
     combined.forEach((att) => {
       if (!att) return;
-      const name = (att.fileName || att.name || "").trim().toLowerCase();
+      const name = (att.fileName || att.name || "attachment").trim();
+      if (!name) return;
       const link = (att.url || att.href || att.link || "").trim();
-      const key = `${name}|${link}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      deduped.push(att);
+      const hasPayload = !!link || !!att.base64;
+      if (!hasPayload) return;
+
+      const key = name.toLowerCase();
+      const existing = byName.get(key);
+      if (!existing) {
+        byName.set(key, att);
+        return;
+      }
+      const existingUrl = (existing.url || existing.href || existing.link || "").trim();
+      const thisUrl = link;
+      const existingHasUrl = !!existingUrl;
+      const thisHasUrl = !!thisUrl;
+      if (!existingHasUrl && thisHasUrl) {
+        byName.set(key, att);
+      } else if (existingHasUrl && thisHasUrl) {
+        // keep the first; no change
+      } else if (!existingHasUrl && !thisHasUrl) {
+        // both base64 only; keep first
+      }
     });
-    return deduped;
+    return Array.from(byName.values());
   }, [activeIncident]);
 
   useEffect(() => {
@@ -1083,7 +1119,17 @@ export default function Home() {
           <section className="card">
             {tab === "summary" ? (
               activeIncident ? (
-                renderSummary(activeIncident.summaryStructured, activeIncident.summary)
+                (() => {
+                  const fallbackSummary =
+                    activeIncident.summary ||
+                    (activeIncident.raw as any)?.Summary ||
+                    (activeIncident.raw as any)?.summary;
+                  const structured =
+                    activeIncident.summaryStructured ||
+                    (activeIncident.raw as any)?.summaryStructured ||
+                    null;
+                  return renderSummary(structured, fallbackSummary, activeIncident.raw);
+                })()
               ) : (
                 <div className="chip">Select an incident to view summary.</div>
               )

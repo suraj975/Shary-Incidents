@@ -205,6 +205,26 @@ async function importIncidents(incidents: any[]) {
       else cdnAttachments.push(u);
     }
 
+    // Strip heavy/base64 attachments from raw before storing to keep docs under 1MB
+    const rawForStore = { ...(normalized.raw || {}) };
+    if (rawForStore.attachments) {
+      // Keep only lightweight metadata if available
+      const meta = [];
+      for (const att of Array.isArray(rawForStore.attachments) ? rawForStore.attachments : []) {
+        meta.push({
+          fileName: att.fileName || att.name,
+          size: att.size,
+          sizeBytes: att.sizeBytes,
+          contentType: att.contentType,
+          url: att.url,
+          href: att.href,
+          link: att.link,
+        });
+      }
+      if (meta.length) rawForStore.attachments = meta;
+      else delete rawForStore.attachments;
+    }
+
     await docRef.set(
       {
         number: normalized.number,
@@ -214,7 +234,7 @@ async function importIncidents(incidents: any[]) {
         summary: normalized.summary,
         summaryStructured: normalized.summaryStructured,
         status: normalized.status,
-        raw: normalized.raw,
+        raw: rawForStore,
         cdnAttachments,
         updatedAt: nowTs(),
       },

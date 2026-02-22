@@ -6,6 +6,7 @@ const PROJECT_ID =
   process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "";
 
 let firestoreInstance: admin.firestore.Firestore | null = null;
+let firestoreSettingsApplied = false;
 
 function getCredential() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -36,8 +37,18 @@ export function getFirestore() {
   if (firestoreInstance) return firestoreInstance;
   initAdminApp();
   const firestore = admin.firestore();
-  // Apply once before any other Firestore calls in this process.
-  firestore.settings({ ignoreUndefinedProperties: true });
+  if (!firestoreSettingsApplied) {
+    try {
+      firestore.settings({ ignoreUndefinedProperties: true });
+    } catch (error: any) {
+      // If Firestore was touched before settings(), skip to avoid initialization error.
+      const msg = String(error?.message || "");
+      if (!msg.includes("settings() once")) {
+        throw error;
+      }
+    }
+    firestoreSettingsApplied = true;
+  }
   firestoreInstance = firestore;
   return firestoreInstance;
 }
