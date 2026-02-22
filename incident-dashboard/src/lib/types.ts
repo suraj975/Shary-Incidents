@@ -7,6 +7,7 @@ export type Incident = {
   summary?: string;
   summaryStructured?: SummaryStructured | null;
   raw?: unknown;
+  cdnAttachments?: Attachment[];
   status?: "open" | "resolved";
   callAttempts?: number;
   noAnswerCount?: number;
@@ -33,4 +34,16 @@ export type SummaryStructured = {
   current_application_state?: string;
   evidence?: string[];
   attachments?: string[];
+};
+
+export type Attachment = {
+  fileName?: string;
+  name?: string;
+  size?: string;
+  sizeBytes?: number;
+  url?: string;
+  href?: string;
+  link?: string;
+  base64?: string;
+  contentType?: string;
 };

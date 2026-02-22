@@ -1,19 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, doc, getDocs, setDoc } from "firebase/firestore";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 
 const PASSWORD = "shary@incident";
-
-function toDocId(number: string) {
-  return number.replace(/[^A-Za-z0-9_-]/g, "_");
-}
-
-function nowTs() {
-  return Date.now();
-}
 
 function pickFirstNonEmpty(...values: any[]) {
   for (const v of values) {
@@ -22,13 +13,6 @@ function pickFirstNonEmpty(...values: any[]) {
     return v;
   }
   return "";
-}
-
-function deriveStatusFromState(stateValue: string, fallback?: "open" | "resolved") {
-  const s = (stateValue || "").toLowerCase();
-  if (!s) return fallback || "open";
-  if (s.includes("resolved") || s.includes("closed")) return "resolved";
-  return "open";
 }
 
 function parseDateMs(value: any) {
@@ -84,7 +68,6 @@ function dedupeByLatestNumber(list: any[]) {
   return Array.from(byNumber.values());
 }
 
-
 export default function ImportPage() {
   const [authed, setAuthed] = useState(false);
   const [password, setPassword] = useState("");
@@ -101,106 +84,30 @@ export default function ImportPage() {
     await signInWithPopup(auth, provider);
   }
 
-function normalizeItem(item: any, existingData?: any) {
-    const resolvedState = pickFirstNonEmpty(
-      item.State,
-      item.state,
-      item["Incident State"],
-      item.status,
-      existingData?.state
-    );
-    const resolvedOpenedAt = pickFirstNonEmpty(
-      item.Opened,
-      item.openedOn,
-      item.openedAt,
-      item.opened,
-      item["Opened At"],
-      item["Opened Date"],
-      item.Updated,
-      item.updatedAt,
-      item.Created,
-      item.createdAt,
-      existingData?.openedAt
-    );
-    const resolvedDescription = pickFirstNonEmpty(
-      item.Description,
-      item.description,
-      existingData?.description
-    );
-    const resolvedSummary = pickFirstNonEmpty(
-      item.summary,
-      existingData?.summary
-    );
-    const resolvedSummaryStructured = pickFirstNonEmpty(
-      item.summaryStructured,
-      existingData?.summaryStructured,
-      null
-    );
-
-    const derivedStatus = deriveStatusFromState(
-      String(resolvedState || ""),
-      existingData?.status
-    );
-
-    return {
-      number: item.Number || item.number || "",
-      state: String(resolvedState || ""),
-      openedAt: String(resolvedOpenedAt || ""),
-      description: String(resolvedDescription || ""),
-      summary: String(resolvedSummary || ""),
-      summaryStructured: resolvedSummaryStructured || null,
-      status: derivedStatus,
-      raw: item,
-    };
-  }
-
   async function handleImport(file: File) {
-    setStatus("Importing...");
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    const inputList = Array.isArray(payload) ? payload : payload?.incidents || [];
-    const list = dedupeByLatestNumber(inputList);
+    try {
+      setStatus("Importing via server…");
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const inputList = Array.isArray(payload) ? payload : payload?.incidents || [];
+      const list = dedupeByLatestNumber(inputList);
 
-    const existing = new Set<string>();
-    const existingById = new Map<string, any>();
-    const existingSnap = await getDocs(collection(db, "incidents"));
-    existingSnap.forEach((docSnap) => {
-      existing.add(docSnap.id);
-      existingById.set(docSnap.id, docSnap.data());
-    });
-
-    let created = 0;
-    let updated = 0;
-    for (const item of list) {
-      const idFromItem = toDocId(item.Number || item.number || "");
-      const normalized = normalizeItem(item, existingById.get(idFromItem));
-      if (!normalized.number) continue;
-      const id = toDocId(normalized.number);
-      await setDoc(
-        doc(db, "incidents", id),
-        {
-          number: normalized.number,
-          state: normalized.state,
-          openedAt: normalized.openedAt,
-          description: normalized.description,
-          summary: normalized.summary,
-          summaryStructured: normalized.summaryStructured,
-          status: normalized.status,
-          raw: normalized.raw,
-          updatedAt: nowTs(),
-        },
-        { merge: true }
-      );
-      if (existing.has(id)) {
-        updated += 1;
-      } else {
-        created += 1;
+      const response = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ incidents: list, password: PASSWORD }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const msg = data?.error || response.statusText || "Import failed";
+        throw new Error(msg);
       }
+      setStatus(
+        `Uploaded ${data.created || 0} new, ${data.updated || 0} updated (from ${data.total || list.length}).`
+      );
+    } catch (error: any) {
+      setStatus(String(error?.message || error));
     }
-
-    setStatus(
-      `Imported ${created} new and updated ${updated} existing incident(s) from ${list.length} unique incidents.`
-    );
   }
 
   if (!user) {

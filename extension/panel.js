@@ -13,11 +13,15 @@ const btnScrape = document.getElementById("btn-scrape");
 const btnClear = document.getElementById("btn-clear");
 const btnDownload = document.getElementById("btn-download");
 const btnSummarize = document.getElementById("btn-summarize");
+const btnUploadFirebase = document.getElementById("btn-upload-firebase");
 const fileInput = document.getElementById("file-input");
+const importUrlEl = document.getElementById("import-url");
+const importPasswordEl = document.getElementById("import-password");
 
 let incidents = [];
 let summaries = [];
 let activeIndex = -1;
+const attachmentUrlCache = new Map();
 
 function setStatus(text, isError = false) {
   statusEl.textContent = text;
@@ -61,6 +65,7 @@ function renderDetail() {
     summaryEl.textContent = summaryItem?.summary || "No summary yet.";
   }
   jsonEl.innerHTML = buildDetailsHtml(incident);
+  bindAttachmentClicks();
 }
 
 function renderStructuredSummary(summary, incident) {
@@ -71,9 +76,13 @@ function renderStructuredSummary(summary, incident) {
   const evidenceItems = (summary.evidence || [])
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("");
-  const attachmentItems = (summary.attachments || [])
-    .map((item) => `<li>${linkify(item)}</li>`)
-    .join("");
+  const attachmentChips = renderAttachmentChips(incident);
+  const attachmentItems =
+    attachmentChips ||
+    (summary.attachments || [])
+      .map((item) => `<li>${linkify(item)}</li>`)
+      .join("") ||
+    "<span class=\"muted\">No attachments.</span>";
 
   return `
     <div class="summary-header">
@@ -98,7 +107,7 @@ function renderStructuredSummary(summary, incident) {
     </details>
     <details class="section">
       <summary>Attachments</summary>
-      <ul class="section-list">${attachmentItems || "<li>No attachments.</li>"}</ul>
+      <div class="section-body">${attachmentItems || "No attachments."}</div>
     </details>
   `;
 }
@@ -157,7 +166,10 @@ function buildDetailsHtml(incident) {
     )
     .join("");
 
-  return `<div class="details-grid">${rows || "<div class='detail-value'>No details available.</div>"}</div>`;
+  const attachments = Array.isArray(incident.attachments) ? incident.attachments : [];
+  const attachmentHtml = renderAttachmentChips(incident);
+
+  return `<div class="details-grid">${rows || "<div class='detail-value'>No details available.</div>"}</div>${attachmentHtml || ""}`;
 }
 
 function escapeHtml(value) {
@@ -179,6 +191,81 @@ function linkify(value) {
     url,
     `<a href="${url}" target="_blank" rel="noreferrer">${label}</a>`
   )}`;
+}
+
+function renderAttachmentChips(incident) {
+  const attachments = Array.isArray(incident.attachments) ? incident.attachments : [];
+  if (!attachments.length) return "";
+  return attachments
+    .map((att, idx) => {
+      const label = escapeHtml(att.fileName || `Attachment ${idx + 1}`);
+      const size = att.sizeBytes ? ` (${Math.round(att.sizeBytes / 1024)} KB)` : "";
+      return `<button class="attachment-thumb" type="button" data-idx="${idx}" tabindex="0">${label}${size}</button>`;
+    })
+    .join("");
+}
+
+function bindAttachmentClicks() {
+  const incident = incidents[activeIndex];
+  if (!incident || !Array.isArray(incident.attachments)) return;
+  const thumbs = document.querySelectorAll(".attachment-thumb");
+  thumbs.forEach((thumb) => {
+    const openPreview = () => {
+      const idx = Number(thumb.getAttribute("data-idx"));
+      const att = incident.attachments[idx];
+      if (!att) return;
+
+      const modal = document.getElementById("img-modal");
+      const imgEl = document.getElementById("img-modal-img");
+      const metaEl = document.getElementById("img-modal-meta");
+      const closeBtn = document.getElementById("img-modal-close");
+
+      getAttachmentSrc(att)
+        .then((src) => {
+          if (!src) return;
+          imgEl.src = src;
+          metaEl.textContent = `${att.fileName || "Attachment"}${att.sizeBytes ? ` • ${Math.round(att.sizeBytes / 1024)} KB` : ""}`;
+          modal.classList.add("open");
+
+          const hide = () => modal.classList.remove("open");
+          closeBtn.onclick = hide;
+          modal.querySelector(".img-modal__backdrop").onclick = hide;
+        })
+        .catch(() => {
+          setStatus("Failed to load attachment preview.", true);
+        });
+    };
+
+    thumb.addEventListener("click", openPreview);
+    thumb.addEventListener("keypress", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        openPreview();
+      }
+    });
+  });
+}
+
+async function getAttachmentSrc(att) {
+  if (!att) return "";
+  if (att.base64) {
+    return `data:${att.contentType || "image/jpeg"};base64,${att.base64}`;
+  }
+  const url = att.url || att.href;
+  if (!url) return "";
+  if (attachmentUrlCache.has(url)) return attachmentUrlCache.get(url);
+
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: {
+      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+    }
+  });
+  if (!response.ok) throw new Error("fetch failed");
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  attachmentUrlCache.set(url, objectUrl);
+  return objectUrl;
 }
 
 function isOlderThanThreeDays(dateText) {
@@ -325,7 +412,52 @@ btnSummarize.addEventListener("click", async () => {
     renderDetail();
     setStatus(`Summaries updated (${summaries.length}).`);
   } catch (error) {
-    setStatus(String(error), true);
+    const isFetch = String(error) === "TypeError: Failed to fetch";
+    const hint = isFetch
+      ? `LLM server unreachable. Ensure it runs at ${serverUrl} (npm run llm-server) or update the URL.`
+      : String(error);
+    setStatus(hint, true);
+  }
+});
+
+btnUploadFirebase.addEventListener("click", async () => {
+  if (!incidents.length) {
+    setStatus("No incidents to upload.", true);
+    return;
+  }
+  const importUrl = importUrlEl.value.trim();
+  if (!importUrl) {
+    setStatus("Missing import URL.", true);
+    return;
+  }
+  const password = importPasswordEl.value.trim();
+  if (!password) {
+    setStatus("Import password required.", true);
+    return;
+  }
+
+  setStatus("Uploading to Firebase...");
+  try {
+    const response = await fetch(importUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ incidents, password })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const msg = data?.error || response.statusText || "Import failed";
+      throw new Error(msg);
+    }
+    const created = data.created || 0;
+    const updated = data.updated || 0;
+    const total = data.total || incidents.length;
+    setStatus(`Uploaded ${created} new, ${updated} updated (from ${total}).`);
+  } catch (error) {
+    const isFetch = String(error) === "TypeError: Failed to fetch";
+    const hint = isFetch
+      ? `Import server unreachable. Ensure it runs at ${importUrl}.`
+      : String(error);
+    setStatus(hint, true);
   }
 });
 

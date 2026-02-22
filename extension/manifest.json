@@ -1,13 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Site1 Table Scraper",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "Scrape Site1 results table after manual login and export JSON/CSV.",
-  "permissions": ["activeTab", "scripting", "tabs", "downloads", "storage", "sidePanel"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "downloads",
+    "storage",
+    "sidePanel"
+  ],
   "host_permissions": [
     "https://esm.gov.ae/*",
     "https://admin.sharyuae.ae/*",
-    "http://localhost:8787/*"
+    "http://localhost:8787/*",
+    "https://incident-dashboard.vercel.app/*"
   ],
   "action": {
     "default_popup": "popup.html",

@@ -7,6 +7,8 @@ let runState = {
 const STALE_RUN_MS = 2 * 60 * 1000;
 const ADMIN_BASE_URL = "https://admin.sharyuae.ae/reports/applications-report";
 const LLM_SERVER_URL = "http://localhost:8787/summarize";
+const ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024; // 8MB safety cap per attachment
+const ATTACHMENT_RETRIES = 2;
 
 function downloadJson(results) {
   const payload = JSON.stringify(results, null, 2);
@@ -16,6 +18,70 @@ function downloadJson(results) {
     filename: "site1_details.json",
     conflictAction: "overwrite",
     saveAs: false
+  });
+}
+
+function arrayBufferToBase64(buffer) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000; // keep call stack safe
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  return btoa(binary);
+}
+
+async function fetchAttachmentData(attachment) {
+  const url = attachment.href;
+  if (!url) throw new Error("Missing attachment URL");
+  let lastError = null;
+  for (let i = 0; i <= ATTACHMENT_RETRIES; i += 1) {
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > ATTACHMENT_MAX_BYTES) {
+        throw new Error(`Attachment too large (${arrayBuffer.byteLength} bytes)`);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      const base64 = arrayBufferToBase64(arrayBuffer);
+
+      return {
+        fileName: attachment.fileName || "",
+        url,
+        contentType,
+        sizeBytes: arrayBuffer.byteLength,
+        base64
+      };
+    } catch (error) {
+      lastError = error;
+      await sleep(300);
+    }
+  }
+  throw lastError || new Error("Attachment fetch failed");
+}
+
+async function collectAttachmentsFromDetail(detail) {
+  if (!detail?.activity || !Array.isArray(detail.activity)) return [];
+
+  const attachments = detail.activity
+    .map((entry) => entry?.attachment)
+    .filter((att) => att && att.href);
+
+  if (!attachments.length) return [];
+
+  const results = await Promise.allSettled(attachments.map((att) => fetchAttachmentData(att)));
+  return results.map((res, index) => {
+    const source = attachments[index];
+    if (res.status === "fulfilled") return res.value;
+    return {
+      fileName: source.fileName || "",
+      url: source.href,
+      error: String(res.reason || "Unknown error")
+    };
   });
 }
 
@@ -456,7 +522,11 @@ async function summarizeWithLocalServer(incidents) {
     const data = await response.json();
     return { ok: true, summaries: Array.isArray(data.summaries) ? data.summaries : [] };
   } catch (error) {
-    return { ok: false, error: String(error) };
+    const message =
+      String(error) === "TypeError: Failed to fetch"
+        ? `LLM server unreachable at ${LLM_SERVER_URL}. Run \`npm run llm-server\` or update LLM_SERVER_URL.`
+        : String(error);
+    return { ok: false, error: message };
   }
 }
 
@@ -471,6 +541,16 @@ function mergeSummariesIntoIncidents(incidents, summaries) {
     if (!summaryObj) return incident;
     return { ...incident, summary: summaryObj.summary || "", summaryStructured: summaryObj.structured || null };
   });
+}
+
+function attachFetchedFiles(resultRow, attachments) {
+  if (!attachments || !attachments.length) return resultRow;
+  const successful = attachments.filter((a) => !a.error);
+  const failed = attachments.filter((a) => a.error);
+  const withAttachments = { ...resultRow };
+  if (successful.length) withAttachments.attachments = successful;
+  if (failed.length) withAttachments.attachmentErrors = failed;
+  return withAttachments;
 }
 
 async function sendMessageWithRetry(tabId, message, retries = 15) {
@@ -575,6 +655,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const resultRow = { ...row };
             if (detailPayload) resultRow.detail = detailPayload;
             if (detailError) resultRow.detailError = detailError;
+
+            if (detailPayload) {
+              const attachments = await collectAttachmentsFromDetail(detailPayload);
+              const withAttachments = attachFetchedFiles(resultRow, attachments);
+              Object.assign(resultRow, withAttachments);
+            }
 
             if (detailPayload) {
               const keys = extractKeysFromDetail(detailPayload);

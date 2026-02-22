@@ -17,8 +17,54 @@ import {
   onSnapshot,
   updateDoc,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import type { Comment, CommentType, Incident, SummaryStructured } from "@/lib/types";
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { auth, db, storage } from "@/lib/firebase";
+import type { Comment, CommentType, Incident, SummaryStructured, Attachment } from "@/lib/types";
+
+function AttachmentCard({
+  att,
+  previewSrc,
+  openHref,
+  onPreview,
+}: {
+  att: Attachment;
+  previewSrc?: string;
+  openHref?: string;
+  onPreview: () => void;
+}) {
+  const size = att.sizeBytes
+    ? `${Math.round(att.sizeBytes / 1024)} KB`
+    : att.size || "";
+  const label = att.fileName || att.name || "Attachment";
+  const href = openHref || att.url || att.href || att.link || "";
+  const isImage = (att.contentType || "").startsWith("image") ||
+    (/\.(png|jpe?g|gif|webp|bmp)$/i.test(label) || /\.(png|jpe?g|gif|webp|bmp)$/i.test(href));
+  const effectiveHref = previewSrc || href;
+
+  return (
+    <div className="attachment-card">
+      {isImage ? (
+        <div
+          className="attachment-thumb"
+          style={{ backgroundImage: previewSrc ? `url(${previewSrc})` : undefined }}
+        >
+          {!previewSrc && <div className="attachment-thumb-placeholder">IMG</div>}
+        </div>
+      ) : null}
+      <div className="attachment-name">{label}</div>
+      <div className="attachment-meta">{size || ""}</div>
+      {isImage ? (
+        <button className="attachment-link" onClick={onPreview}>
+          View
+        </button>
+      ) : effectiveHref ? (
+        <a className="attachment-link" href={effectiveHref} target="_blank" rel="noreferrer">
+          Open
+        </a>
+      ) : null}
+    </div>
+  );
+}
 
 const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
 const COMMENT_MAX_LENGTH = 500;
@@ -37,6 +83,27 @@ function parseOpenedAt(value?: string) {
 
 function nowTs() {
   return Date.now();
+}
+
+async function resolveStorageUrl(rawUrl: string) {
+  if (!rawUrl || !rawUrl.includes("firebasestorage.googleapis.com")) return rawUrl;
+  if (rawUrl.includes("token=")) return rawUrl;
+
+  const nameMatch = rawUrl.match(/[?&]name=([^&]+)/);
+  const encodedPathMatch = rawUrl.match(/\/o\/([^?]+)/);
+  const path =
+    (nameMatch ? decodeURIComponent(nameMatch[1]) : null) ||
+    (encodedPathMatch ? decodeURIComponent(encodedPathMatch[1]) : null);
+
+  if (!path) return rawUrl;
+
+  try {
+    const storageRef = ref(storage, path);
+    return await getDownloadURL(storageRef);
+  } catch {
+    // If we cannot resolve to a signed URL, return empty so callers can avoid CORS hits.
+    return "";
+  }
 }
 
 function renderSummary(structured?: SummaryStructured | null, fallback?: string) {
@@ -140,7 +207,7 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [activeId, setActiveId] = useState<string>("");
-  const [tab, setTab] = useState<"summary" | "app" | "log">("summary");
+  const [tab, setTab] = useState<"summary" | "app" | "log" | "attachments">("summary");
   const [comments, setComments] = useState<Comment[]>([]);
   const [logs, setLogs] = useState<
     { id: string; text: string; createdAt: number; authorName?: string }[]
@@ -155,8 +222,18 @@ export default function Home() {
     "all" | "assigned" | "resolved" | "in_progress" | "hold"
   >("all");
   const [opsDrawerOpen, setOpsDrawerOpen] = useState(false);
+  const [attachmentPreviews, setAttachmentPreviews] = useState<Record<string, string>>({});
+  const [attachmentLinks, setAttachmentLinks] = useState<Record<string, string>>({});
+  const [attachmentModal, setAttachmentModal] = useState<{ open: boolean; src: string; name: string }>({
+    open: false,
+    src: "",
+    name: "",
+  });
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const commentChars = commentText.length;
   const isCommentValid = commentText.trim().length > 0 && commentChars <= COMMENT_MAX_LENGTH;
+  const [hasUnsignedAttachments, setHasUnsignedAttachments] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -181,6 +258,7 @@ export default function Home() {
             summary: data.summary,
             summaryStructured: data.summaryStructured || null,
             raw: data.raw,
+            cdnAttachments: data.cdnAttachments || [],
             status: data.status || "open",
             callAttempts: data.callAttempts || 0,
             noAnswerCount: data.noAnswerCount || 0,
@@ -272,6 +350,177 @@ export default function Home() {
     Object.entries(app).forEach(([k, v]) => add(k, v));
     return merged;
   }, [activeIncident]);
+
+  const attachmentList = useMemo<Attachment[]>(() => {
+    const raw = (activeIncident?.raw as any) || {};
+    const detailAttachments: Attachment[] = Array.isArray(raw.attachments)
+      ? raw.attachments
+      : [];
+    const cdn = Array.isArray(activeIncident?.cdnAttachments) ? activeIncident?.cdnAttachments : [];
+
+    const summaryAttachments = Array.isArray(activeIncident?.summaryStructured?.attachments)
+      ? activeIncident?.summaryStructured?.attachments
+      : [];
+
+    const parsedSummary: Attachment[] = summaryAttachments
+      .map((item: string) => {
+        const match = item.match(/\(([^)]+)\)\s*-\s*(https?:\/\/\S+)/);
+        if (match) {
+          const name = item.split(" (")[0];
+          return { fileName: name, size: match[1], url: match[2] };
+        }
+        const urlMatch = item.match(/https?:\/\/\S+/);
+        if (urlMatch) return { fileName: item.replace(urlMatch[0], "").trim() || item, url: urlMatch[0] };
+        return { fileName: item };
+      })
+      .filter(Boolean);
+
+    // Merge and dedupe by fileName + url/href/link to avoid repeats in the UI
+    const combined = [...cdn, ...detailAttachments, ...parsedSummary];
+    const seen = new Set<string>();
+    const deduped: Attachment[] = [];
+    combined.forEach((att) => {
+      if (!att) return;
+      const name = (att.fileName || att.name || "").trim().toLowerCase();
+      const link = (att.url || att.href || att.link || "").trim();
+      const key = `${name}|${link}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      deduped.push(att);
+    });
+    return deduped;
+  }, [activeIncident]);
+
+  useEffect(() => {
+    let alive = true;
+    const cache = new Map<string, string>();
+
+    async function getPreview(att: Attachment, idx: number) {
+      if (att.base64) {
+        return `data:${att.contentType || "image/jpeg"};base64,${att.base64}`;
+      }
+      const key = att.url || att.href || att.link || `att-${idx}`;
+      if (!key) return "";
+      if (attachmentPreviews[key]) return attachmentPreviews[key];
+      if (cache.has(key)) return cache.get(key) || "";
+
+      const resolvedUrl = key.startsWith("http") ? await resolveStorageUrl(key) : "";
+      if (!resolvedUrl) {
+        setHasUnsignedAttachments(true);
+        return "";
+      }
+      cache.set(key, resolvedUrl);
+      return resolvedUrl;
+    }
+
+    async function loadAll() {
+      const entries = await Promise.all(
+        attachmentList.map(async (att, idx) => {
+          const key = att.url || att.href || att.link || `att-${idx}`;
+          const src = await getPreview(att, idx);
+          const resolved = key.startsWith("http") ? await resolveStorageUrl(key) : key;
+          return [key, src, resolved] as const;
+        })
+      );
+      if (!alive) return;
+      const nextPreview: Record<string, string> = {};
+      const nextLinks: Record<string, string> = {};
+      entries.forEach(([k, v, resolved]) => {
+        if (v) nextPreview[k] = v;
+        if (resolved) nextLinks[k] = resolved;
+      });
+      setAttachmentPreviews(nextPreview);
+      setAttachmentLinks(nextLinks);
+      setHasUnsignedAttachments(entries.some(([, , resolved]) => resolved === ""));
+    }
+
+    if (attachmentList.length) {
+      loadAll();
+    } else {
+      setAttachmentPreviews({});
+    }
+
+    return () => {
+      alive = false;
+    };
+  }, [attachmentList]);
+
+  async function handlePreview(att: Attachment, key: string) {
+    let src = attachmentPreviews[key];
+    if (!src) {
+      // try to fetch on demand
+      if (att.base64) {
+        src = `data:${att.contentType || "image/jpeg"};base64,${att.base64}`;
+      } else if (att.url || att.href || att.link) {
+        try {
+          const resolvedUrl = await resolveStorageUrl(att.url || att.href || att.link || "");
+          if (resolvedUrl) {
+            src = resolvedUrl;
+            setAttachmentPreviews((prev) => ({ ...prev, [key]: src! }));
+            setAttachmentLinks((prev) => ({ ...prev, [key]: resolvedUrl }));
+          }
+        } catch (error) {
+          // ignore; will fail gracefully
+        }
+      }
+    }
+
+    if (src) {
+      setAttachmentModal({ open: true, src, name: att.fileName || att.name || "Attachment" });
+    }
+  }
+
+  async function uploadAllAttachments() {
+    if (!activeIncident) return;
+    const incidentNumber = activeIncident.number || "incident";
+    const toUpload = attachmentList.filter(
+      (att) =>
+        att.base64 &&
+        !(att.url || "").includes("firebasestorage.googleapis.com") &&
+        !(att.href || "").includes("firebasestorage.googleapis.com")
+    );
+    if (!toUpload.length) return;
+
+    setUploadingAttachments(true);
+    setUploadError(null);
+    try {
+      const uploaded: Attachment[] = [];
+      for (const att of toUpload) {
+        const fileName = att.fileName || att.name || "attachment";
+        // Deterministic path so re-uploads overwrite instead of duplicating.
+        const path = `incidents/${incidentNumber}/${fileName}`;
+        const storageRef = ref(storage, path);
+        await uploadString(storageRef, att.base64 as string, "base64", {
+          contentType: att.contentType || "application/octet-stream",
+        });
+        const url = await getDownloadURL(storageRef);
+        uploaded.push({
+          fileName,
+          sizeBytes: att.sizeBytes,
+          size: att.size,
+          contentType: att.contentType,
+          url,
+        });
+        setAttachmentPreviews((prev) => ({ ...prev, [att.url || att.href || path]: url }));
+        setAttachmentLinks((prev) => ({ ...prev, [att.url || att.href || path]: url }));
+      }
+      // Merge with de-duplication by fileName to avoid appending duplicates.
+      const merged = [...(activeIncident.cdnAttachments || [])];
+      for (const u of uploaded) {
+        const idx = merged.findIndex((c) => c?.fileName === u.fileName);
+        if (idx >= 0) merged[idx] = u;
+        else merged.push(u);
+      }
+      await updateDoc(doc(db, "incidents", activeIncident.id), {
+        cdnAttachments: merged,
+        updatedAt: nowTs(),
+      });
+    } catch (error: any) {
+      setUploadError(String(error?.message || error));
+    } finally {
+      setUploadingAttachments(false);
+    }
+  }
 
   useEffect(() => {
     if (!activeIncident) return;
@@ -821,6 +1070,12 @@ export default function Home() {
             >
               Activity Log
             </div>
+            <div
+              className={`tab ${tab === "attachments" ? "active" : ""}`}
+              onClick={() => setTab("attachments")}
+            >
+              Attachments
+            </div>
           </div>
         </div>
 
@@ -849,11 +1104,52 @@ export default function Home() {
                   </div>
                 </div>
               </>
-            ) : tab === "log" ? (
-              activeIncident ? (
-                <>
-                  <div className="summary-block">
-                    <div className="section-title">Activity Log</div>
+            ) : tab === "attachments" && activeIncident ? (
+              <>
+                <div className="summary-block">
+                  <div className="attachments-header">
+                    <div className="section-title">Attachments</div>
+                    <div className="attachments-actions">
+                      {uploadError ? <span className="chip danger-text">{uploadError}</span> : null}
+                      {hasUnsignedAttachments ? (
+                        <span className="chip warning">
+                          Some attachments need re-upload (no signed URL).
+                        </span>
+                      ) : null}
+                      <button
+                        className="button"
+                        onClick={uploadAllAttachments}
+                        disabled={uploadingAttachments || attachmentList.length === 0}
+                      >
+                        {uploadingAttachments ? "Uploading..." : "Upload to CDN"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="attachment-grid">
+                    {attachmentList.map((att, idx) => {
+                      const key = att.url || att.href || att.link || `att-${idx}`;
+                      const openHref = attachmentLinks[key] || att.url || att.href || att.link || "";
+                      return (
+                        <AttachmentCard
+                          key={key}
+                          att={att as any}
+                          previewSrc={attachmentPreviews[key]}
+                          openHref={openHref}
+                          onPreview={() => handlePreview(att as Attachment, key)}
+                        />
+                      );
+                    })}
+                    {attachmentList.length === 0 && (
+                      <div className="chip">No attachments.</div>
+                    )}
+                  </div>
+                </div>
+              </>
+      ) : tab === "log" ? (
+        activeIncident ? (
+          <>
+            <div className="summary-block">
+              <div className="section-title">Activity Log</div>
                     {logs.map((l) => (
                       <div key={l.id} className="comment">
                         <div className="comment-header">
@@ -872,7 +1168,7 @@ export default function Home() {
                 <div className="chip">Select an incident to view logs.</div>
               )
             ) : (
-              <div className="chip">Select an incident to view application details.</div>
+              <div className="chip">Select an incident to view details.</div>
             )}
           </section>
 
@@ -899,6 +1195,25 @@ export default function Home() {
               </button>
             </div>
             <div className="ops-drawer-body">{operationsPanel}</div>
+          </div>
+        </div>
+      ) : null}
+
+      {attachmentModal.open ? (
+        <div className="modal-backdrop" onClick={() => setAttachmentModal({ open: false, src: "", name: "" })}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title">{attachmentModal.name}</div>
+              <button
+                className="button icon-button"
+                onClick={() => setAttachmentModal({ open: false, src: "", name: "" })}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <img src={attachmentModal.src} alt={attachmentModal.name} className="modal-image" />
+            </div>
           </div>
         </div>
       ) : null}

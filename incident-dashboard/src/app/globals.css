@@ -250,8 +250,8 @@ button, input, textarea, select {
 }
 
 .incident-card.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(106,227,255,0.2);
+  /* Keep status colors visible; add an outer glow instead of changing the border */
+  box-shadow: 0 0 0 2px rgba(106, 227, 255, 0.25);
 }
 
 .incident-card.urgent {
@@ -746,6 +746,141 @@ button, input, textarea, select {
   background: #1a2233;
   color: var(--text);
   border: 1px solid var(--border);
+}
+
+.attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.attachment-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elev-2);
+  transition: border-color 0.2s ease, transform 0.08s ease;
+  word-break: break-word;
+}
+
+.attachment-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.attachment-thumb {
+  width: 100%;
+  padding-top: 60%;
+  border-radius: 10px;
+  background: #0b0e14 center / cover no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+.attachment-thumb-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  border: 1px dashed var(--border);
+}
+
+.attachment-name {
+  font-weight: 600;
+}
+
+.attachment-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.attachment-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  width: fit-content;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+
+.attachment-link:hover {
+  border-color: var(--accent);
+}
+
+.attachments-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.attachments-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.danger-text {
+  color: #ff6b6b;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: min(90vw, 960px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 12px;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  background: #0b0e14;
+}
+
+.modal-image {
+  max-width: 100%;
+  max-height: 78vh;
+  border-radius: 10px;
 }
 
 .content {

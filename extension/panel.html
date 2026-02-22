@@ -30,6 +30,17 @@
         <div class="row">
           <input id="server-url" class="input" type="text" value="http://localhost:8787/summarize" />
         </div>
+        <div class="row">
+          <input id="import-url" class="input" type="text" value="http://localhost:8787/import" />
+          <input
+            id="import-password"
+            class="input"
+            type="password"
+            placeholder="Import password"
+            style="max-width: 200px"
+          />
+          <button id="btn-upload-firebase" class="btn primary">Upload to Firebase</button>
+        </div>
         <div id="status" class="status"></div>
       </section>
 
@@ -53,6 +64,15 @@
           </div>
         </div>
       </section>
+    </div>
+
+    <div id="img-modal" class="img-modal">
+      <div class="img-modal__backdrop"></div>
+      <div class="img-modal__dialog">
+        <button id="img-modal-close" class="img-modal__close">×</button>
+        <img id="img-modal-img" src="" alt="Attachment preview" />
+        <div id="img-modal-meta" class="img-modal__meta"></div>
+      </div>
     </div>
 
     <script src="panel.js"></script>
