@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+//@ts-ignore
 import type { Bucket } from "firebase-admin/storage";
 import { getBucket, getFirestore } from "@/lib/firebase-admin";
 
@@ -30,7 +31,10 @@ function pickFirstNonEmpty<T>(...values: T[]): T | "" {
   return "";
 }
 
-function deriveStatusFromState(stateValue: string, fallback?: "open" | "resolved") {
+function deriveStatusFromState(
+  stateValue: string,
+  fallback?: "open" | "resolved",
+) {
   const s = String(stateValue || "").toLowerCase();
   if (!s) return fallback || "open";
   if (s.includes("resolved") || s.includes("closed")) return "resolved";
@@ -66,8 +70,8 @@ function dedupeByLatestNumber(list: any[]) {
         current.Updated,
         current.updatedAt,
         current.Created,
-        current.createdAt
-      )
+        current.createdAt,
+      ),
     );
     const nextMs = parseDateMs(
       pickFirstNonEmpty(
@@ -80,8 +84,8 @@ function dedupeByLatestNumber(list: any[]) {
         item.Updated,
         item.updatedAt,
         item.Created,
-        item.createdAt
-      )
+        item.createdAt,
+      ),
     );
     if (nextMs >= currentMs) {
       byNumber.set(key, item);
@@ -96,7 +100,7 @@ function normalizeItem(item: any, existingData?: any) {
     item.state,
     item["Incident State"],
     item.status,
-    existingData?.state
+    existingData?.state,
   );
   const resolvedOpenedAt = pickFirstNonEmpty(
     item.Opened,
@@ -109,21 +113,27 @@ function normalizeItem(item: any, existingData?: any) {
     item.updatedAt,
     item.Created,
     item.createdAt,
-    existingData?.openedAt
+    existingData?.openedAt,
   );
   const resolvedDescription = pickFirstNonEmpty(
     item.Description,
     item.description,
-    existingData?.description
+    existingData?.description,
   );
-  const resolvedSummary = pickFirstNonEmpty(item.summary, existingData?.summary);
+  const resolvedSummary = pickFirstNonEmpty(
+    item.summary,
+    existingData?.summary,
+  );
   const resolvedSummaryStructured = pickFirstNonEmpty(
     item.summaryStructured,
     existingData?.summaryStructured,
-    null
+    null,
   );
 
-  const derivedStatus = deriveStatusFromState(String(resolvedState || ""), existingData?.status);
+  const derivedStatus = deriveStatusFromState(
+    String(resolvedState || ""),
+    existingData?.status,
+  );
 
   return {
     number: item.Number || item.number || "",
@@ -137,12 +147,17 @@ function normalizeItem(item: any, existingData?: any) {
   };
 }
 
-async function uploadAttachmentsForIncident(bucket: Bucket, incidentNumber: string, attachments: any[]) {
+async function uploadAttachmentsForIncident(
+  bucket: Bucket,
+  incidentNumber: string,
+  attachments: any[],
+) {
   const uploaded: any[] = [];
 
   for (const att of attachments || []) {
     const alreadyCdn =
-      typeof att?.url === "string" && att.url.includes("firebasestorage.googleapis.com");
+      typeof att?.url === "string" &&
+      att.url.includes("firebasestorage.googleapis.com");
     if (alreadyCdn && !att.base64) {
       uploaded.push(att);
       continue;
@@ -161,7 +176,10 @@ async function uploadAttachmentsForIncident(bucket: Bucket, incidentNumber: stri
         contentType: att.contentType || undefined,
       },
     });
-    const [url] = await file.getSignedUrl({ action: "read", expires: "2099-12-31" });
+    const [url] = await file.getSignedUrl({
+      action: "read",
+      expires: "2099-12-31",
+    });
     uploaded.push({
       fileName,
       size: att.size,
@@ -196,7 +214,11 @@ async function importIncidents(incidents: any[]) {
     const existingCdn = Array.isArray(existingData?.cdnAttachments)
       ? existingData.cdnAttachments
       : [];
-    const uploaded = await uploadAttachmentsForIncident(bucket, normalized.number, attachments);
+    const uploaded = await uploadAttachmentsForIncident(
+      bucket,
+      normalized.number,
+      attachments,
+    );
     // Overwrite or add by fileName to avoid duplicate entries.
     const cdnAttachments = [...existingCdn];
     for (const u of uploaded) {
@@ -210,7 +232,9 @@ async function importIncidents(incidents: any[]) {
     if (rawForStore.attachments) {
       // Keep only lightweight metadata if available
       const meta = [];
-      for (const att of Array.isArray(rawForStore.attachments) ? rawForStore.attachments : []) {
+      for (const att of Array.isArray(rawForStore.attachments)
+        ? rawForStore.attachments
+        : []) {
         meta.push({
           fileName: att.fileName || att.name,
           size: att.size,
@@ -238,7 +262,7 @@ async function importIncidents(incidents: any[]) {
         cdnAttachments,
         updatedAt: nowTs(),
       },
-      { merge: true }
+      { merge: true },
     );
 
     if (snap.exists) updated += 1;
