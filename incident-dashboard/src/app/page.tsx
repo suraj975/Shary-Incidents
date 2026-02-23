@@ -17,7 +17,7 @@ import {
   onSnapshot,
   updateDoc,
 } from "firebase/firestore";
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { ref, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import type { Comment, CommentType, Incident, SummaryStructured, Attachment } from "@/lib/types";
 
@@ -248,8 +248,6 @@ export default function Home() {
     src: "",
     name: "",
   });
-  const [uploadingAttachments, setUploadingAttachments] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const commentChars = commentText.length;
   const isCommentValid = commentText.trim().length > 0 && commentChars <= COMMENT_MAX_LENGTH;
   const [hasUnsignedAttachments, setHasUnsignedAttachments] = useState(false);
@@ -503,58 +501,6 @@ export default function Home() {
 
     if (src) {
       setAttachmentModal({ open: true, src, name: att.fileName || att.name || "Attachment" });
-    }
-  }
-
-  async function uploadAllAttachments() {
-    if (!activeIncident) return;
-    const incidentNumber = activeIncident.number || "incident";
-    const toUpload = attachmentList.filter(
-      (att) =>
-        att.base64 &&
-        !(att.url || "").includes("firebasestorage.googleapis.com") &&
-        !(att.href || "").includes("firebasestorage.googleapis.com")
-    );
-    if (!toUpload.length) return;
-
-    setUploadingAttachments(true);
-    setUploadError(null);
-    try {
-      const uploaded: Attachment[] = [];
-      for (const att of toUpload) {
-        const fileName = att.fileName || att.name || "attachment";
-        // Deterministic path so re-uploads overwrite instead of duplicating.
-        const path = `incidents/${incidentNumber}/${fileName}`;
-        const storageRef = ref(storage, path);
-        await uploadString(storageRef, att.base64 as string, "base64", {
-          contentType: att.contentType || "application/octet-stream",
-        });
-        const url = await getDownloadURL(storageRef);
-        uploaded.push({
-          fileName,
-          sizeBytes: att.sizeBytes,
-          size: att.size,
-          contentType: att.contentType,
-          url,
-        });
-        setAttachmentPreviews((prev) => ({ ...prev, [att.url || att.href || path]: url }));
-        setAttachmentLinks((prev) => ({ ...prev, [att.url || att.href || path]: url }));
-      }
-      // Merge with de-duplication by fileName to avoid appending duplicates.
-      const merged = [...(activeIncident.cdnAttachments || [])];
-      for (const u of uploaded) {
-        const idx = merged.findIndex((c) => c?.fileName === u.fileName);
-        if (idx >= 0) merged[idx] = u;
-        else merged.push(u);
-      }
-      await updateDoc(doc(db, "incidents", activeIncident.id), {
-        cdnAttachments: merged,
-        updatedAt: nowTs(),
-      });
-    } catch (error: any) {
-      setUploadError(String(error?.message || error));
-    } finally {
-      setUploadingAttachments(false);
     }
   }
 
@@ -1155,21 +1101,13 @@ export default function Home() {
                 <div className="summary-block">
                   <div className="attachments-header">
                     <div className="section-title">Attachments</div>
-                    <div className="attachments-actions">
-                      {uploadError ? <span className="chip danger-text">{uploadError}</span> : null}
-                      {hasUnsignedAttachments ? (
+                    {hasUnsignedAttachments ? (
+                      <div className="attachments-actions">
                         <span className="chip warning">
                           Some attachments need re-upload (no signed URL).
                         </span>
-                      ) : null}
-                      <button
-                        className="button"
-                        onClick={uploadAllAttachments}
-                        disabled={uploadingAttachments || attachmentList.length === 0}
-                      >
-                        {uploadingAttachments ? "Uploading..." : "Upload to CDN"}
-                      </button>
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="attachment-grid">
                     {attachmentList.map((att, idx) => {
