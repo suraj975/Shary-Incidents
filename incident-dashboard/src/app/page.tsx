@@ -21,6 +21,8 @@ import { ref, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import type { Comment, CommentType, Incident, SummaryStructured, Attachment } from "@/lib/types";
 
+const ALLOWED_EMAIL_DOMAINS = ["slashdata.ae", "shory.com"];
+
 function AttachmentCard({
   att,
   previewSrc,
@@ -224,6 +226,7 @@ function renderSummary(structured?: SummaryStructured | null, fallback?: string,
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
+  const [authError, setAuthError] = useState("");
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [activeId, setActiveId] = useState<string>("");
   const [tab, setTab] = useState<"summary" | "app" | "log" | "attachments">("summary");
@@ -253,8 +256,25 @@ export default function Home() {
   const [hasUnsignedAttachments, setHasUnsignedAttachments] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u || null);
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setUser(null);
+        return;
+      }
+
+      const email = u.email || "";
+      const domain = email.split("@")[1]?.toLowerCase() || "";
+      const isAllowed = ALLOWED_EMAIL_DOMAINS.includes(domain);
+
+      if (!isAllowed) {
+        setAuthError("Only @slashdata.ae or @shory.com accounts may access. You have been signed out.");
+        setUser(null);
+        await signOut(auth);
+        return;
+      }
+
+      setAuthError("");
+      setUser(u);
     });
     return () => unsub();
   }, []);
@@ -562,6 +582,7 @@ export default function Home() {
   }
 
   async function handleGoogleLogin() {
+    setAuthError("");
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   }
@@ -889,8 +910,13 @@ export default function Home() {
               Continue with Google
             </button>
             <div className="login-note">
-              Use your company Gmail account to continue.
+              Use your @slashdata.ae or @shory.com Gmail account to continue.
             </div>
+            {authError ? (
+              <div className="chip" style={{ marginTop: 12, color: "#d33" }}>
+                {authError}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
