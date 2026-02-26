@@ -1694,7 +1694,24 @@ html[data-theme="green"] .login-card::after {
 html[data-theme="light"] .google-button,
 html[data-theme="sand"] .google-button,
 html[data-theme="green"] .google-button {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(135deg, #39aaa5 0%, #46cfc9 100%);
   color: #ffffff;
+  box-shadow: 0 6px 20px rgba(57, 170, 165, 0.35);
+}
+
+html[data-theme="green"] .google-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 30px rgba(57, 170, 165, 0.45);
+}
+
+html[data-theme="green"] .google-button:active {
+  transform: translateY(0);
+  background: linear-gradient(135deg, #2f908c 0%, #39aaa5 100%);
+}
+
+html[data-theme="green"] .google-button svg path {
+  fill: #ffffff;
 }
 
 /* Light-family themes: shift core surfaces away from hardcoded dark fills. */
