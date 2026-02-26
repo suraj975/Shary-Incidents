@@ -2023,6 +2023,27 @@ html[data-theme="green"] .summary-title {
   border-left-color: var(--brand);
 }
 
+html[data-theme="green"] .timeline li,
+html[data-theme="green"] .summary-text {
+  color: var(--text-secondary);
+}
+
+html[data-theme="green"] .timeline li::marker {
+  color: var(--brand-hover);
+}
+
+html[data-theme="green"] .summary-text strong,
+html[data-theme="green"] .timeline li strong {
+  color: #59fff8;
+}
+
+html[data-theme="green"] .summary-text a,
+html[data-theme="green"] .timeline li a {
+  color: #59fff8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 html[data-theme="green"] .pill-assigned {
   border-color: rgba(70, 207, 201, 0.8);
   background: #46cfc9;
