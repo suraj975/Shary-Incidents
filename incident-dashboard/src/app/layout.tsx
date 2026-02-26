@@ -14,14 +14,31 @@ export const metadata = {
   },
 };
 
+const themeInitScript = `
+  (function () {
+    try {
+      var key = "incident_dashboard_theme";
+      var saved = (localStorage.getItem(key) || "").toLowerCase();
+      if (saved === "dark" || saved === "light" || saved === "sand" || saved === "green") {
+        document.documentElement.setAttribute("data-theme", saved);
+      } else {
+        document.documentElement.setAttribute("data-theme", "green");
+      }
+    } catch (e) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={spaceGrotesk.className}>{children}</body>
+    <html lang="en" data-theme="green">
+      <body className={spaceGrotesk.className}>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {children}
+      </body>
     </html>
   );
 }

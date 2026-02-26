@@ -22,7 +22,22 @@ import { auth, db } from "@/lib/firebase";
 import { onIdTokenChanged } from "firebase/auth";
 import { buildIncidentInsights } from "@/lib/insights";
 
-const COLORS = ["#5ed7ff", "#7cf7c4", "#ffd166", "#ff6b6b", "#b48cff"];
+const COLORS = [
+  "var(--chart-pie-1, #5ed7ff)",
+  "var(--chart-pie-2, #7cf7c4)",
+  "var(--chart-pie-3, #ffd166)",
+  "var(--chart-pie-4, #ff6b6b)",
+  "var(--chart-pie-5, #b48cff)",
+];
+const CHART_TICK = { fill: "var(--chart-label, #9fb2c8)" };
+const CHART_LEGEND = { color: "var(--chart-label, #9fb2c8)" };
+const CHART_TOOLTIP = {
+  backgroundColor: "var(--bg-elev, #111620)",
+  border: "1px solid var(--border, #253047)",
+  borderRadius: "10px",
+};
+const CHART_TOOLTIP_LABEL = { color: "var(--chart-label, #9fb2c8)" };
+const CHART_TOOLTIP_ITEM = { color: "var(--text, #f1f5f9)" };
 
 export default function InsightsPage() {
   const [user, setUser] = useState<any>(null);
@@ -81,14 +96,16 @@ export default function InsightsPage() {
           <span className="brand-dot" />
           Shary Incidents
         </div>
-        <div className="sidebar-section">
-          <div className="chip">Logged in as {user.email}</div>
-          <Link className="button" href="/">
-            Back to Dashboard
-          </Link>
-          <Link className="button primary" href="/insights/export">
-            Export Studio
-          </Link>
+        <div className="sidebar-section insights-quick-panel">
+          <div className="chip sidebar-email-chip">{user.email}</div>
+          <div className="insights-quick-actions">
+            <Link className="button" href="/">
+              Dashboard
+            </Link>
+            <Link className="button primary" href="/insights/export">
+              Export Studio
+            </Link>
+          </div>
         </div>
       </aside>
 
@@ -163,15 +180,15 @@ export default function InsightsPage() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={metrics.trend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid, rgba(255,255,255,0.08))" />
+                      <XAxis dataKey="date" tick={CHART_TICK} />
+                      <YAxis tick={CHART_TICK} />
+                      <Tooltip contentStyle={CHART_TOOLTIP} labelStyle={CHART_TOOLTIP_LABEL} itemStyle={CHART_TOOLTIP_ITEM} />
+                      <Legend wrapperStyle={CHART_LEGEND} />
                       <Line
                         type="monotone"
                         dataKey="opened"
-                        stroke="#4cc9f0"
+                        stroke="var(--chart-open, #4cc9f0)"
                         strokeWidth={3}
                         dot={{ r: 3 }}
                         activeDot={{ r: 5 }}
@@ -179,7 +196,7 @@ export default function InsightsPage() {
                       <Line
                         type="monotone"
                         dataKey="resolved"
-                        stroke="#ff8a3d"
+                        stroke="var(--chart-resolved, #ff8a3d)"
                         strokeWidth={3}
                         dot={{ r: 3 }}
                         activeDot={{ r: 5 }}
@@ -208,8 +225,8 @@ export default function InsightsPage() {
                           />
                         ))}
                       </Pie>
-                      <Legend />
-                      <Tooltip />
+                      <Legend wrapperStyle={CHART_LEGEND} />
+                      <Tooltip contentStyle={CHART_TOOLTIP} labelStyle={CHART_TOOLTIP_LABEL} itemStyle={CHART_TOOLTIP_ITEM} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -220,11 +237,11 @@ export default function InsightsPage() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={metrics.stateBars}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#7cf7c4" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid, rgba(255,255,255,0.08))" />
+                      <XAxis dataKey="name" tick={CHART_TICK} />
+                      <YAxis tick={CHART_TICK} />
+                      <Tooltip contentStyle={CHART_TOOLTIP} labelStyle={CHART_TOOLTIP_LABEL} itemStyle={CHART_TOOLTIP_ITEM} />
+                      <Bar dataKey="value" fill="var(--chart-bar-1, #7cf7c4)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -235,11 +252,11 @@ export default function InsightsPage() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={metrics.resolutionByState}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="avgDays" fill="#ffd166" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid, rgba(255,255,255,0.08))" />
+                      <XAxis dataKey="name" tick={CHART_TICK} />
+                      <YAxis tick={CHART_TICK} />
+                      <Tooltip contentStyle={CHART_TOOLTIP} labelStyle={CHART_TOOLTIP_LABEL} itemStyle={CHART_TOOLTIP_ITEM} />
+                      <Bar dataKey="avgDays" fill="var(--chart-bar-3, #ffd166)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -250,11 +267,11 @@ export default function InsightsPage() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={metrics.effortBars}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="bucket" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#b48cff" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid, rgba(255,255,255,0.08))" />
+                      <XAxis dataKey="bucket" tick={CHART_TICK} />
+                      <YAxis tick={CHART_TICK} />
+                      <Tooltip contentStyle={CHART_TOOLTIP} labelStyle={CHART_TOOLTIP_LABEL} itemStyle={CHART_TOOLTIP_ITEM} />
+                      <Bar dataKey="count" fill="var(--chart-bar-2, #b48cff)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -265,11 +282,11 @@ export default function InsightsPage() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={metrics.effortBars}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="bucket" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="resolvedRate" fill="#5ed7ff" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid, rgba(255,255,255,0.08))" />
+                      <XAxis dataKey="bucket" tick={CHART_TICK} />
+                      <YAxis tick={CHART_TICK} />
+                      <Tooltip contentStyle={CHART_TOOLTIP} labelStyle={CHART_TOOLTIP_LABEL} itemStyle={CHART_TOOLTIP_ITEM} />
+                      <Bar dataKey="resolvedRate" fill="var(--chart-open, #5ed7ff)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

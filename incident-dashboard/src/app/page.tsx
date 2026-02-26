@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import { ref, getDownloadURL } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
+import { redactSensitiveFields, isSensitiveFieldKey } from "@/lib/sanitize";
 import type { Comment, CommentType, Incident, SummaryStructured, Attachment } from "@/lib/types";
 
 const ALLOWED_EMAIL_DOMAINS = ["slashdata.ae", "shory.com"];
@@ -70,6 +71,7 @@ function AttachmentCard({
 
 const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
 const COMMENT_MAX_LENGTH = 500;
+const THEME_STORAGE_KEY = "incident_dashboard_theme";
 const QUICK_COMMENT_TEMPLATES = [
   "Called user",
   "No answer",
@@ -225,6 +227,14 @@ function renderSummary(structured?: SummaryStructured | null, fallback?: string,
 }
 
 export default function Home() {
+  const [theme, setTheme] = useState<"dark" | "light" | "sand" | "green">(() => {
+    if (typeof window === "undefined") return "green";
+    const saved = (window.localStorage.getItem(THEME_STORAGE_KEY) || "").toLowerCase();
+    return saved === "dark" || saved === "light" || saved === "sand" || saved === "green"
+      ? saved
+      : "green";
+  });
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [authError, setAuthError] = useState("");
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -239,6 +249,7 @@ export default function Home() {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const [incidentQuery, setIncidentQuery] = useState("");
   const [incidentFilter, setIncidentFilter] = useState<
     "all" | "assigned" | "resolved" | "in_progress" | "hold"
@@ -254,6 +265,22 @@ export default function Home() {
   const commentChars = commentText.length;
   const isCommentValid = commentText.trim().length > 0 && commentChars <= COMMENT_MAX_LENGTH;
   const [hasUnsignedAttachments, setHasUnsignedAttachments] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!workspaceMenuOpen) return;
+      if (!workspaceMenuRef.current?.contains(event.target as Node)) {
+        setWorkspaceMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [workspaceMenuOpen]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -362,7 +389,7 @@ export default function Home() {
   }, [incidents, incidentQuery, incidentFilter]);
 
   const applicationDetails = useMemo(() => {
-    const raw = (activeIncident?.raw as any) || {};
+    const raw = redactSensitiveFields((activeIncident?.raw as any) || {});
     const app = raw.applicationData || {};
     const keys = raw.applicationKeys || {};
     const merged: Record<string, string> = {};
@@ -380,11 +407,12 @@ export default function Home() {
     add("Reported For", raw["Reported For"]);
     add("Assignment Group", raw["Assignment Group"]);
     add("ApplicationId", keys.applicationId);
-    add("EmiratesId", keys.emiratesId);
     add("Presale No", keys.presaleNo);
     add("Chassis No", keys.chassisNo);
 
-    Object.entries(app).forEach(([k, v]) => add(k, v));
+    Object.entries(app)
+      .filter(([k]) => !isSensitiveFieldKey(k))
+      .forEach(([k, v]) => add(k, v));
     return merged;
   }, [activeIncident]);
 
@@ -931,19 +959,60 @@ export default function Home() {
           Shary Incidents
         </div>
 
-        <div className="sidebar-section">
-          <div className="chip">Logged in as {user.email}</div>
-          <button className="button" onClick={handleLogout}>
-            Log out
-          </button>
-          <Link className="button" href="/insights">
-            Insights
-          </Link>
-        </div>
-
-        <div className="sidebar-section">
-          <label className="section-title">Import Incidents</label>
-          <div className="chip">Open /import to upload JSON</div>
+        <div className="sidebar-section sidebar-menu" ref={workspaceMenuRef}>
+          <div className="sidebar-identity-row">
+            <div className="chip sidebar-email-chip">{user.email}</div>
+            <button
+              className={`button sidebar-menu-trigger ${workspaceMenuOpen ? "open" : ""}`}
+              onClick={() => setWorkspaceMenuOpen((prev) => !prev)}
+              aria-expanded={workspaceMenuOpen}
+              aria-controls="workspace-sidebar-menu"
+              aria-label="Open account menu"
+            >
+              <span className="sidebar-menu-icon" aria-hidden="true">☰</span>
+              <span>Menu</span>
+            </button>
+          </div>
+          {workspaceMenuOpen ? (
+            <div id="workspace-sidebar-menu" className="sidebar-menu-popover">
+              <div className="section-title">Theme & Tools</div>
+              <div className="theme-toggle-group">
+                <button
+                  className={`button theme-toggle ${theme === "dark" ? "active" : ""}`}
+                  onClick={() => setTheme("dark")}
+                >
+                  Dark
+                </button>
+                <button
+                  className={`button theme-toggle ${theme === "light" ? "active" : ""}`}
+                  onClick={() => setTheme("light")}
+                >
+                  Light
+                </button>
+                <button
+                  className={`button theme-toggle ${theme === "sand" ? "active" : ""}`}
+                  onClick={() => setTheme("sand")}
+                >
+                  Sand
+                </button>
+                <button
+                  className={`button theme-toggle ${theme === "green" ? "active" : ""}`}
+                  onClick={() => setTheme("green")}
+                >
+                  Green
+                </button>
+              </div>
+              <Link className="button" href="/insights" onClick={() => setWorkspaceMenuOpen(false)}>
+                Insights
+              </Link>
+              <Link className="button" href="/import" onClick={() => setWorkspaceMenuOpen(false)}>
+                Import Incidents
+              </Link>
+              <button className="button" onClick={handleLogout}>
+                Log out
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="sidebar-section">
@@ -1006,6 +1075,19 @@ export default function Home() {
               const isUrgent = opened
                 ? Date.now() - opened.getTime() > threeDaysMs
                 : false;
+              const stateText = (i.state || "").toLowerCase();
+              const stateChipClass =
+                i.status === "resolved"
+                  ? "pill-resolved"
+                  : stateText.includes("assigned")
+                  ? "pill-assigned"
+                  : stateText.includes("in progress")
+                  ? "pill-in-progress"
+                  : stateText.includes("hold")
+                  ? "pill-hold"
+                  : isUrgent
+                  ? "pill-urgent"
+                  : "pill-open";
               return (
                 <div
                   key={i.id}
@@ -1022,15 +1104,7 @@ export default function Home() {
                       {i.opsHelp ? (
                         <div className="incident-pill pill-ops">Ops Help</div>
                       ) : null}
-                      <div
-                        className={`incident-pill ${
-                          i.status === "resolved"
-                            ? "pill-resolved"
-                            : isUrgent
-                            ? "pill-urgent"
-                            : "pill-open"
-                        }`}
-                      >
+                      <div className={`incident-pill ${stateChipClass}`}>
                         {i.status === "resolved" ? "Resolved" : i.state || "—"}
                       </div>
                     </div>

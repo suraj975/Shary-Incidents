@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 //@ts-ignore
 import type { Bucket } from "firebase-admin/storage";
 import { getBucket, getFirestore } from "@/lib/firebase-admin";
+import { splitSensitiveFields } from "@/lib/sanitize";
+import { encryptJson } from "@/lib/crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -135,6 +137,13 @@ function normalizeItem(item: any, existingData?: any) {
     existingData?.status,
   );
 
+  const { sanitized, sensitive } = splitSensitiveFields(item);
+
+  const encrypted =
+    sensitive && Object.keys(sensitive || {}).length
+      ? encryptJson(sensitive)
+      : null;
+
   return {
     number: item.Number || item.number || "",
     state: String(resolvedState || ""),
@@ -143,7 +152,8 @@ function normalizeItem(item: any, existingData?: any) {
     summary: String(resolvedSummary || ""),
     summaryStructured: resolvedSummaryStructured || null,
     status: derivedStatus,
-    raw: item,
+    raw: sanitized,
+    rawSensitiveEnc: encrypted,
   };
 }
 
@@ -259,6 +269,7 @@ async function importIncidents(incidents: any[]) {
         summaryStructured: normalized.summaryStructured,
         status: normalized.status,
         raw: rawForStore,
+        rawSensitiveEnc: normalized.rawSensitiveEnc || existingData?.rawSensitiveEnc,
         cdnAttachments,
         updatedAt: nowTs(),
       },

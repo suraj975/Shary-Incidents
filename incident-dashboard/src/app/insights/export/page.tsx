@@ -7,6 +7,7 @@ import { onIdTokenChanged } from "firebase/auth";
 import * as XLSX from "xlsx";
 import { auth, db } from "@/lib/firebase";
 import { parseOpenedAt } from "@/lib/insights";
+import { redactSensitiveFields } from "@/lib/sanitize";
 
 const TRACKER_PRESET_KEYS = [
   "opened_date",
@@ -47,7 +48,6 @@ const DEFAULT_LABELS: Record<string, string> = {
   ops_help: "Ops Help",
   description: "Description",
   assignment_group: "Assignment Group",
-  emriates_id: "Emirates Id",
   chassis_no: "Chassis No",
 };
 
@@ -86,7 +86,7 @@ function toIso(value: any) {
 }
 
 function buildRow(incident: any) {
-  const raw = incident.raw || {};
+  const raw = redactSensitiveFields(incident.raw || {});
   const openedDate =
     parseOpenedAt(
       incident.openedAt ||
@@ -144,10 +144,6 @@ function buildRow(incident: any) {
     ops_help: opsHelp ? "Yes" : "No",
     description: toCell(incident.description),
     assignment_group: pickFirst(raw["Assignment Group"], raw.assignment_group),
-    emriates_id: pickFirst(
-      getPath(raw, "applicationKeys.emiratesId"),
-      raw["EmiratesId"]
-    ),
     chassis_no: pickFirst(
       getPath(raw, "applicationKeys.chassisNo"),
       raw["Chassis No"]
@@ -399,15 +395,17 @@ export default function ExportInsightsPage() {
           <span className="brand-dot" />
           Export Studio
         </div>
-        <div className="sidebar-section">
+        <div className="sidebar-section insights-quick-panel">
           <div className="section-title">Rows: {rows.length}</div>
           <div className="section-title">Columns: {selectedColumns.length}</div>
-          <button className="button primary" onClick={downloadExcel} disabled={!selectedColumns.length}>
-            Download .xlsx
-          </button>
-          <Link className="button" href="/insights">
-            Back to Insights
-          </Link>
+          <div className="insights-quick-actions">
+            <button className="button primary" onClick={downloadExcel} disabled={!selectedColumns.length}>
+              Download .xlsx
+            </button>
+            <Link className="button" href="/insights">
+              Back to Insights
+            </Link>
+          </div>
         </div>
       </aside>
 
